@@ -8,10 +8,10 @@ def _project_root() -> str:
 
 
 def train_from_json(json_path: str, progress_cb: Optional[Callable[[int], None]] = None, log_cb: Optional[Callable[[str], None]] = None, epochs: int = 12) -> Dict[str, Any]:
-    """Entrena un modelo a partir de un JSON con la estructura esperada.
+    """Train a model from JSON with expected structure.
 
-    Importa TensorFlow y scikit-learn en tiempo de ejecución para permitir que el
-    módulo sea importado incluso si TensorFlow no está disponible.
+    Imports TensorFlow and scikit-learn at runtime to allow module import
+    even if TensorFlow is not available.
     """
     try:
         import tensorflow as tf
@@ -19,7 +19,7 @@ def train_from_json(json_path: str, progress_cb: Optional[Callable[[int], None]]
         from sklearn.utils import class_weight
         import numpy as np
     except Exception as e:
-        raise RuntimeError("TensorFlow y dependencias requeridas no están disponibles: %s" % e)
+        raise RuntimeError("TensorFlow and required dependencies are not available: %s" % e)
 
     class _EpochProgressCallback(tf.keras.callbacks.Callback):
         def __init__(self, epochs: int, progress_cb: Optional[Callable[[int], None]] = None, log_cb: Optional[Callable[[str], None]] = None, start: int = 20, end: int = 85):
@@ -27,7 +27,7 @@ def train_from_json(json_path: str, progress_cb: Optional[Callable[[int], None]]
             self.epochs = epochs
             self.progress_cb = progress_cb
             self.log_cb = log_cb
-            # rango donde mapear el progreso de epochs
+            # Range where epoch progress is mapped
             self.start = start
             self.end = end
 
@@ -39,10 +39,10 @@ def train_from_json(json_path: str, progress_cb: Optional[Callable[[int], None]]
                 # clamp
                 pct = max(0, min(100, pct))
                 self.progress_cb(pct)
-                # mensaje descriptivo de epoch
+                # Descriptive epoch message
                 if self.log_cb:
                     try:
-                        self.log_cb(f'Epoch {epoch+1}/{self.epochs} completado ({pct}%).')
+                        self.log_cb(f'Epoch {epoch+1}/{self.epochs} completed ({pct}%).')
                     except Exception:
                         pass
             except Exception:
@@ -63,66 +63,66 @@ def train_from_json(json_path: str, progress_cb: Optional[Callable[[int], None]]
             except Exception:
                 pass
 
-    # reportar inicio
+    # Report start
     _safe_progress(0)
-    _safe_log('Inicio del proceso de entrenamiento')
+    _safe_log('Starting training process')
 
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    preguntas = []
-    categorias = []
+    texts = []
+    categories = []
 
-    # Intentar parsear la estructura conocida
-    for categoria, contenido in data.items():
-        # respuestas esperadas como lista de dicts con clave 'respuesta'
-        for respuesta in contenido.get('respuestas', []):
-            if isinstance(respuesta, dict) and 'respuesta' in respuesta:
-                preguntas.append(respuesta['respuesta'])
-                categorias.append(categoria)
-            elif isinstance(respuesta, str):
-                preguntas.append(respuesta)
-                categorias.append(categoria)
+    # Parse expected structure with English keys
+    for category, content in data.items():
+        # 'responses' expected as list of dicts with 'response' key
+        for response in content.get('responses', []):
+            if isinstance(response, dict) and 'response' in response:
+                texts.append(response['response'])
+                categories.append(category)
+            elif isinstance(response, str):
+                texts.append(response)
+                categories.append(category)
 
-        # sinonimos pueden ser lista de strings
-        for sinonimo in contenido.get('sinonimos', []):
-            preguntas.append(sinonimo)
-            categorias.append(categoria)
+        # 'synonyms' as list of strings
+        for synonym in content.get('synonyms', []):
+            texts.append(synonym)
+            categories.append(category)
 
-    if len(preguntas) == 0:
-        raise ValueError('No se encontraron preguntas/entradas en el JSON proporcionado.')
+    if not texts:
+        raise ValueError('No training data found in JSON file.')
 
-    # reportar progreso luego del parseo
+    # Report progress after parsing
     _safe_progress(5)
-    _safe_log(f'Parseado JSON: {len(preguntas)} entradas preparadas, {len(set(categorias))} categorías detectadas')
+    _safe_log(f'Parsed JSON: {len(texts)} entries, {len(set(categories))} categories detected')
 
-    # Tokenizer y secuencias
+    # Tokenizer and sequences
     tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token="<OOV>")
-    tokenizer.fit_on_texts(preguntas)
+    tokenizer.fit_on_texts(texts)
 
     _safe_progress(10)
-    _safe_log('Tokenizer entrenado con las entradas (fit_on_texts)')
+    _safe_log('Tokenizer trained on input texts')
 
-    sequences = tokenizer.texts_to_sequences(preguntas)
+    sequences = tokenizer.texts_to_sequences(texts)
     padded = tf.keras.preprocessing.sequence.pad_sequences(sequences, padding='post')
 
-    # Normalizar (opcional)
+    # Normalize (optional)
     if len(tokenizer.word_index) > 0:
         padded = padded / float(len(tokenizer.word_index))
 
-    # Codificar categorías
-    unique_labels = list(sorted(set(categorias)))
+    # Encode categories
+    unique_labels = list(sorted(set(categories)))
     label_encoder = {label: idx for idx, label in enumerate(unique_labels)}
-    encoded = [label_encoder[c] for c in categorias]
+    encoded = [label_encoder[c] for c in categories]
     encoded = np.array(encoded, dtype=np.int32)
 
     # Split
     X_train, X_test, y_train, y_test = train_test_split(padded, encoded, test_size=0.1, random_state=42)
 
     _safe_progress(15)
-    _safe_log('Preprocesamiento completado. Preparando dataset y definiendo modelo.')
+    _safe_log('Preprocessing complete. Preparing dataset and defining model.')
 
-    # Modelo simple
+    # Simple model
     vocab_size = len(tokenizer.word_index) + 1
     model = tf.keras.Sequential([
         tf.keras.layers.Embedding(input_dim=vocab_size, output_dim=64, mask_zero=True),
@@ -133,20 +133,20 @@ def train_from_json(json_path: str, progress_cb: Optional[Callable[[int], None]]
 
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
-    # Pesos de clase (opcional, robustez)
+    # Class weights (optional, for robustness)
     try:
-        classes = np.unique(categorias)
-        cw = class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=categorias)
+        classes = np.unique(categories)
+        cw = class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=categories)
         class_weights_dict = {label_encoder[label]: float(w) for label, w in zip(classes, cw)}
     except Exception:
         class_weights_dict = None
 
-    # Callbacks para progreso
+    # Callbacks for progress
     cb = []
     if progress_cb or log_cb:
         cb.append(_EpochProgressCallback(epochs, progress_cb, log_cb=log_cb, start=20, end=85))
         try:
-            # LambdaCallback como respaldo para asegurar llamadas por epoch y log
+            # LambdaCallback as fallback to ensure calls per epoch and log
             def _lambda_on_epoch_end(epoch, logs, *, _epochs=epochs, _start=20, _end=85, _p=progress_cb, _l=log_cb):
                 try:
                     pct = _start + int(((epoch + 1) / float(_epochs)) * (_end - _start))
@@ -158,7 +158,7 @@ def train_from_json(json_path: str, progress_cb: Optional[Callable[[int], None]]
                             pass
                     if _l:
                         try:
-                            _l(f'Epoch {epoch+1}/{_epochs} completado ({pct}%).')
+                            _l(f'Epoch {epoch+1}/{_epochs} completed ({pct}%).')
                         except Exception:
                             pass
                 except Exception:
@@ -191,21 +191,21 @@ def train_from_json(json_path: str, progress_cb: Optional[Callable[[int], None]]
     tok_json = tokenizer.to_json()
     with open(tokenizer_path, 'w', encoding='utf-8') as f:
         f.write(tok_json)
-    _safe_log(f'Se ha creado el archivo tokenizer: {tokenizer_path}')
+    _safe_log(f'Tokenizer saved: {tokenizer_path}')
 
     # model
     model.save(model_path)
-    _safe_log(f'Se ha creado el archivo Keras: {model_path}')
+    _safe_log(f'Keras model saved: {model_path}')
 
     # label encoder
     with open(label_path, 'w', encoding='utf-8') as f:
         json.dump(label_encoder, f, ensure_ascii=False, indent=2)
-    _safe_log(f'Se ha creado el archivo label encoder: {label_path}')
+    _safe_log(f'Label encoder saved: {label_path}')
 
-    # Informe final y progresos
+    # Final progress report
     _safe_progress(95)
 
-    items_serialized = len(preguntas)
+    items_serialized = len(texts)
 
     _safe_progress(100)
 
@@ -218,16 +218,16 @@ def train_from_json(json_path: str, progress_cb: Optional[Callable[[int], None]]
 
 
 def convert_to_tflite(model_dir: Optional[str] = None, progress_cb: Optional[Callable[[int], None]] = None, log_cb: Optional[Callable[[str], None]] = None) -> str:
-    """Convierte el modelo Keras guardado a TFLite.
+    """Convert saved Keras model to TFLite.
 
-    Por defecto busca en `generated/json/text_classifier.keras`. Si se proporciona
-    `model_dir`, buscará dentro de esa carpeta.
-    Retorna la ruta del archivo TFLite.
+    By default looks for `generated/json/text_classifier.keras`. If `model_dir`
+    is provided, will look inside that folder.
+    Returns path to TFLite file.
     """
     try:
         import tensorflow as tf
     except Exception as e:
-        raise RuntimeError("TensorFlow no está disponible: %s" % e)
+        raise RuntimeError("TensorFlow is not available: %s" % e)
 
     def _safe_log(msg: str):
         if log_cb:
@@ -244,7 +244,7 @@ def convert_to_tflite(model_dir: Optional[str] = None, progress_cb: Optional[Cal
                 pass
 
     _safe_progress(5)
-    _safe_log('Iniciando conversión a TFLite')
+    _safe_log('Starting TFLite conversion')
 
     root = _project_root()
     if model_dir:
@@ -255,27 +255,30 @@ def convert_to_tflite(model_dir: Optional[str] = None, progress_cb: Optional[Cal
         out_dir = os.path.join(root, 'generated', 'json')
 
     if not os.path.exists(model_path):
-        raise FileNotFoundError(f"No se encontró el modelo Keras en: {model_path}")
+        raise FileNotFoundError(f"Keras model not found: {model_path}")
 
     model = tf.keras.models.load_model(model_path)
     _safe_progress(25)
-    _safe_log('Modelo cargado. Iniciando conversión con TFLiteConverter')
+    _safe_log('Model loaded. Converting with TFLiteConverter')
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
     try:
         tflite_model = converter.convert()
     except Exception as e:
-        _safe_log(f'Error durante la conversión: {e}')
-        raise
+        _safe_log(f'Conversion error: {e}')
+        raise RuntimeError(f"TFLite conversion failed: {e}") from e
 
     _safe_progress(90)
-    _safe_log('Conversión completada (en memoria). Guardando archivo TFLite...')
+    _safe_log('Conversion complete. Saving TFLite file...')
 
     out_path = os.path.join(out_dir, 'text_classifier.tflite')
-    with open(out_path, 'wb') as f:
-        f.write(tflite_model)
+    try:
+        with open(out_path, 'wb') as f:
+            f.write(tflite_model)
+    except OSError as e:
+        raise OSError(f"Failed to write TFLite file to {out_path}: {e}") from e
 
     _safe_progress(100)
-    _safe_log(f'TFLite guardado en: {out_path}')
+    _safe_log(f'TFLite saved: {out_path}')
 
     return out_path

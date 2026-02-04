@@ -1,6 +1,54 @@
+# IDE and Editor
 /.idea/
-/.venv/
+/.vscode/
+/.qodo/
+*.swp
+*.swo
+*~
 
-# Ignorar carpetas de salida/artefactos y pruebas (en raíz y en subdirectorios)
+# Python
+/.venv/
+/.venv_*/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist-packages/
+
+# Build artifacts
 /generated/
 **/generated/
+/build/
+/dist/
+*.spec
+*.app
+*.exe
+*.dmg
+*.deb
+*.rpm
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp

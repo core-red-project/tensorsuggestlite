@@ -1,0 +1,42 @@
+POSITIVE:
+  responses:
+    - response: "This is excellent!"
+    - response: "I love this product"
+    - response: "Great quality and fast delivery"
+    - response: "Highly recommended"
+    - response: "Exceeded my expectations"
+  synonyms:
+    - "good"
+    - "great"
+    - "amazing"
+    - "wonderful"
+    - "fantastic"
+
+NEGATIVE:
+  responses:
+    - response: "This is terrible"
+    - response: "Very disappointing"
+    - response: "Waste of money"
+    - response: "Poor quality"
+    - response: "Would not recommend"
+  synonyms:
+    - "bad"
+    - "poor"
+    - "awful"
+    - "horrible"
+    - "disappointing"
+
+NEUTRAL:
+  responses:
+    - response: "It's okay"
+    - response: "As described"
+    - response: "Average product"
+    - response: "Nothing special"
+    - response: "Meets basic expectations"
+  synonyms:
+    - "okay"
+    - "fine"
+    - "acceptable"
+    - "adequate"
+    - "standard"
+

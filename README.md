@@ -1,229 +1,309 @@
-# TensorSuggestLite v2
+# TensorSuggestLite
 
-![TensorSuggestLite](TensorSuggestLite.png)
+<p align="center">
+  <strong>Configuration-Driven Text Classification</strong><br>
+  <em>A CoreRed Experimental Tool</em>
+</p>
 
-[![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-experimental-yellow.svg)](#)
-[![Dependencies](https://img.shields.io/badge/dependencies-tensorflow%20%7C%20PyQt6-blue.svg)](#)
-[![License](https://img.shields.io/badge/license-CR--NC--1.0-lightgrey.svg)](LICENSE)
+<p align="center">
+  <a href="#about">About</a> •
+  <a href="#features">Features</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#documentation">Documentation</a> •
+  <a href="#contributing">Contributing</a>
+</p>
 
-TensorSuggestLite es una utilidad ligera para interpretar datos de configuración (JSON, TOML, YAML) y entrenar un clasificador de texto simple a partir de esos ficheros. Proporciona intérpretes por formato, un entrenador que exporta artefactos (tokenizer, modelo Keras y label encoder) y una conversión a TFLite para desplegar en dispositivos embebidos.
+---
 
-Características principales
--------------------------
+## About
 
-- Interpreta entradas en JSON, TOML y YAML con estructura esperada por los intérpretes.
-- Entrenador basado en TensorFlow/Keras con callbacks de progreso y logging.
-- Exporta artefactos en `generated/<format>/`:
-  - `tokenizer.json`
-  - `text_classifier.keras`
-  - `label_encoder.json`
-  - `text_classifier.tflite` (tras conversión)
-- Interfaz gráfica simple (PyQt6) para importar archivos, entrenar, convertir y exportar.
-- Diseño modular: cada formato tiene su propio intérprete y trainer (`json_interpreter/`, `toml_interpreter/`, `yaml_interpreter/`).
+**TensorSuggestLite** transforms structured configuration files (JSON, YAML, TOML) into trained TensorFlow/Keras text classification models with automatic TFLite export for embedded deployment.
 
-Instalación
------------
+Designed for rapid ML prototyping, TensorSuggestLite eliminates boilerplate code by treating configuration as training data. Define your categories and examples in a simple file format, and let the application handle tokenization, training, and model export.
 
-Se recomienda crear un entorno virtual antes de la instalación:
+### Philosophy
 
-```bash
-python -m venv .venv
-source .venv/bin/activate   # macOS / Linux (zsh/bash)
-```
+> *"Configuration as training data."*
 
-Instala las dependencias listadas en `requirements.txt`:
+TensorSuggestLite embodies pragmatic ML workflows: declarative inputs, transparent processing, portable outputs. No framework lock-in, no hidden complexity—just direct transformation from structured data to deployable models.
 
-```bash
-pip install -r requirements.txt
-```
+This is a **CoreRed** project, part of an experimental toolkit for developers who value simplicity and reproducibility.
 
-Nota: TensorFlow es la dependencia más pesada; si sólo quieres revisar el código sin ejecutar entrenamientos, puedes omitir instalar TensorFlow hasta que vayas a entrenar.
+## Features
 
-Uso rápido (Quickstart)
------------------------
+- **Multi-Format Input**: Parse JSON, YAML, and TOML configuration files
+- **Automated Training**: TensorFlow/Keras model generation with progress tracking
+- **Complete Artifact Export**:
+  - `tokenizer.json` - Vocabulary and preprocessing config
+  - `text_classifier.keras` - Full Keras model for inference
+  - `label_encoder.json` - Category-to-index mappings
+  - `text_classifier.tflite` - Quantized model for mobile/edge
+- **Dual Interface**:
+  - PyQt6 desktop GUI with real-time feedback
+  - Python API for scripting and automation
+- **Modular Architecture**: Format-specific interpreters with isolated logic
+- **Theme Support**: Dark and light UI themes
+- **Cross-Platform**: Runs on Linux, macOS, and Windows
 
-1) Ejecutar la interfaz gráfica (GUI):
+## Installation
 
-```bash
-python tensorsuggestlite.py
-```
-
-La aplicación abrirá una ventana donde puedes importar un archivo JSON/TOML/YAML, entrenar el modelo, convertirlo a TFLite y exportarlo.
-
-2) Uso programático (ejemplo de entrenamiento desde JSON):
+### Quick Start
 
 ```bash
-python - <<'PY'
-from json_interpreter import trainer as jt
-# Entrena sin callbacks (bloqueante) — requiere TensorFlow y dependencias instaladas
-result = jt.train_from_json('test/question_data.json')
-print('Resultado:', result)
-PY
+git clone https://github.com/Sxnnyside-Project/TensorSuggestLite.git
+cd TensorSuggestLite
+make setup
 ```
 
-3) Ejemplo con callbacks de progreso y logs (para integrar en scripts o probar sin GUI):
+### Prerequisites
+
+- Python 3.8 or later
+- pip (Python package manager)
+- 2 GB RAM minimum (4 GB recommended)
+
+### Manual Setup
+
+```bash
+# Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements-pinned.txt
+```
+
+### Verification
+
+```bash
+# Test core imports
+python -c "from json_interpreter import trainer; print('✓ Installation verified')"
+
+# Launch GUI
+make run
+```
+
+## Usage
+
+### GUI Application
+
+```bash
+make run
+```
+
+**Workflow**:
+1. Click **Import JSON/YAML/TOML** → select configuration file
+2. Click **Train Model** → wait for training (1-5 minutes)
+3. Click **Generate TFLite** → convert to mobile format
+4. Click **Export TFLite** → save for deployment
+
+### Programmatic API
+
+#### Basic Training
 
 ```python
-from json_interpreter import trainer as jt
+from json_interpreter import trainer
 
-def progress_cb(pct):
-    print(f'Progreso: {pct}%')
-
-def log_cb(msg):
-    print('LOG:', msg)
-
-res = jt.train_from_json('test/question_data.json', progress_cb=progress_cb, log_cb=log_cb)
-print('Artefactos generados:', res)
+result = trainer.train_from_json('config.json')
+print(f"Model: {result['model_path']}")
 ```
 
-4) Conversión a TFLite (programática):
+#### With Progress Callbacks
 
 ```python
-from json_interpreter import trainer as jt
-# Convierte el modelo guardado en generated/json
-out = jt.convert_to_tflite()
-print('TFLite guardado en:', out)
+from json_interpreter import trainer
+
+def on_progress(percent):
+    print(f"Training: {percent}%")
+
+def on_log(message):
+    print(f"[LOG] {message}")
+
+result = trainer.train_from_json(
+    'config.json',
+    progress_cb=on_progress,
+    log_cb=on_log,
+    epochs=12
+)
 ```
 
-Estructura del proyecto
------------------------
+#### TFLite Conversion
 
-Resumen de los archivos y carpetas más relevantes:
+```python
+from json_interpreter import trainer
+
+tflite_path = trainer.convert_to_tflite(
+    model_dir='generated/json',
+    progress_cb=on_progress,
+    log_cb=on_log
+)
+print(f"TFLite: {tflite_path}")
+```
+
+### Configuration Format
+
+All formats follow this structure:
+
+```json
+{
+  "CATEGORY_NAME": {
+    "respuestas": [
+      {"respuesta": "training text example 1"},
+      {"respuesta": "training text example 2"}
+    ],
+    "sinonimos": ["synonym1", "synonym2"]
+  }
+}
+```
+
+**Example** (`test/question_data.json`):
+```json
+{
+  "POSITIVE": {
+    "respuestas": [
+      {"respuesta": "This is excellent!"},
+      {"respuesta": "I love this product"}
+    ],
+    "sinonimos": ["good", "great", "amazing"]
+  },
+  "NEGATIVE": {
+    "respuestas": [
+      {"respuesta": "This is terrible"},
+      {"respuesta": "Very disappointing"}
+    ],
+    "sinonimos": ["bad", "poor", "awful"]
+  }
+}
+```
+
+## Architecture
 
 ```
-/
-├── tensorsuggestlite.py        # Punto de entrada (GUI y orquestador)
-├── requirements.txt            # Dependencias recomendadas
-├── README.md                   # (este archivo)
-├── generated/                  # Artefactos de entrenamiento y conversión
+TensorSuggestLite/
+├── tensorsuggestlite.py      # GUI entry point
+├── json_interpreter/          # JSON format handler
+│   └── trainer.py             # Training & conversion
+├── yaml_interpreter/          # YAML format handler
+│   └── trainer.py
+├── toml_interpreter/          # TOML format handler
+│   └── trainer.py
+├── styles/                    # UI themes
+│   ├── dark.qss
+│   └── light.qss
+├── examples/                  # Functional examples (English schema)
+│   ├── example.json           # Recommended format
+│   ├── example.yaml
+│   └── example.toml
+├── test/                      # Test data (legacy, Spanish)
+├── generated/                 # Runtime output (git-ignored)
 │   ├── json/
-│   ├── toml/
-│   └── yaml/
-├── json_interpreter/           # Lógica y trainer para JSON
-│   └── trainer.py
-├── toml_interpreter/           # Lógica y trainer para TOML
-│   └── trainer.py
-├── yaml_interpreter/           # Lógica y trainer para YAML
-│   └── trainer.py
-├── test/                       # Datos de ejemplo (JSON/TOML/YAML)
-└── icons/                      # Iconos y recursos UI
+│   ├── yaml/
+│   └── toml/
+└── docs/                      # Documentation
 ```
 
-Requisitos
-----------
+### Technology Stack
 
-Extraídos de `requirements.txt`:
+| Component | Technology |
+|-----------|------------|
+| ML Framework | TensorFlow/Keras |
+| GUI | PyQt6 |
+| Data Processing | NumPy, scikit-learn |
+| Config Parsing | PyYAML, toml |
 
-- Python 3.8+
-- tensorflow
-- numpy
-- scikit-learn
-- PyQt6
-- PyYAML
-- toml
+### Processing Pipeline
 
-Nota: versiones concretas no están fijadas en `requirements.txt`. Para producción se recomienda pinnear versiones en un `requirements-lock.txt` o usar poetry/poetry.lock.
+1. **Parse** configuration → extract text samples and labels
+2. **Tokenize** → build vocabulary using Keras Tokenizer
+3. **Encode** → map labels to numeric IDs
+4. **Train** → simple neural network (Embedding → Dense → Softmax)
+5. **Export** → save tokenizer, model, label encoder
+6. **Convert** → TFLite with quantization optimization
 
-Salida esperada / Artefactos
----------------------------
+## Documentation
 
-Tras un entrenamiento exitoso (por ejemplo con `train_from_json`) el trainer escribe en `generated/<format>/` los siguientes ficheros:
+- **[User Guide](docs/USER_GUIDE.md)** - Installation, usage, troubleshooting
+- **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Architecture, extending, API reference
+- **[Contributing](CONTRIBUTING.md)** - How to contribute
+- **[Security](SECURITY.md)** - Vulnerability reporting
+- **[Repository Status](REPOSITORY_STATUS.md)** - Project health and limitations
 
-- tokenizer.json
-- text_classifier.keras
-- label_encoder.json
-
-La conversión (convert_to_tflite) crea `text_classifier.tflite` en la misma carpeta.
-
-Consejos y troubleshooting
---------------------------
-
-- Error por falta de TensorFlow: asegúrate de haber instalado `tensorflow` y que tu entorno tiene suficiente memoria.
-- Problemas de OOM en entrenamiento: reduce el tamaño del batch o entrena en una máquina con más RAM/GPU.
-- Si la GUI no muestra iconos, verifica que la carpeta `icons/` y los svg están presentes.
-- Para pruebas rápidas puedes usar los ejemplos en `test/`.
-
-Contribuir
----------
-
-Contribuciones son bienvenidas:
-
-- Abre un issue para reportar bugs o proponer features.
-- Envía pull requests contra la rama `main` (o la rama por defecto en tu repo).
-- Añade tests para nuevas funcionalidades y asegúrate de que las dependencias necesarias se declaran en `requirements.txt`.
-
-Agradecimientos y créditos
---------------------------
-
-Desarrollado por CoreRed Project.
-Iconos y assets provistos en la carpeta `icons/`.
-
-Licencia
---------
-
-Este proyecto está licenciado bajo la "CoreRed Public Non-Commercial License (CR-NC-1.0)".
-
-Resumen (no sustituye el texto completo en `LICENSE`):
-
-- Permite el uso público, copia, modificación y redistribución de este software.
-- Las distribuciones derivadas NO pueden ser vendidas ni explotadas comercialmente.
-- Se recomienda (pero no es obligatorio) acreditar a CoreRed Project en redistribuciones.
-- Los modelos, pesos, tokenizadores o artefactos generados por entrenamientos son propiedad del usuario que los crea, no de CoreRed.
-- El software se entrega "tal cual" sin garantías.
-
-Consulta el texto completo de la licencia en `LICENSE` para detalles y condiciones legales.
-
-Contacto
---------
-
-Si necesitas soporte o quieres colaborar, abre un issue en el repositorio o contacta al mantenedor principal del proyecto [Houjou Sxnnyside](https://github.com/HoujouSxnnyside) del equipo CoreRed Project.
-
-## Empaquetado para macOS (.app) usando PyInstaller
-
-Se incluye soporte para generar una aplicación macOS (`.app`) con PyInstaller. Hay un script reproducible en la raíz del proyecto:
-
-- `build_mac_app.sh` — crea (opcional) un virtualenv, instala PyInstaller y construye la app usando `build/TensorSuggestLite.spec`.
-
-Pasos rápidos (recomendado):
-
-1. Asegúrate de tener Xcode Command Line Tools instaladas y, opcionalmente, `cairosvg` para generar el icono `.icns` desde SVG:
+## Makefile Commands
 
 ```bash
-xcode-select --install
-# opcional: para convertir SVG a PNG/ICNS
-pip install cairosvg
+make help      # Show all commands
+make setup     # Install dependencies
+make run       # Launch GUI
+make clean     # Remove generated files
+make lint      # Run code quality checks
+make test      # Run tests (when implemented)
 ```
 
-2. Ejecuta el script para crear la app (por defecto crea un virtualenv de build y NO instala TensorFlow):
+## Project Status
 
-```bash
-chmod +x build_mac_app.sh
-./build_mac_app.sh
-```
+**Version**: 2.0 (Experimental)
 
-- Si quieres usar el entorno actual (no crear un venv): `./build_mac_app.sh --no-venv`
-- Si quieres forzar la instalación de TensorFlow y empaquetarlo (advertencia: incrementa mucho el tamaño): `./build_mac_app.sh --with-tf`
+TensorSuggestLite is functional and stable for prototyping. API is subject to change based on community feedback.
 
-Resultado:
+### Known Limitations
 
-- La app se generará en `dist/TensorSuggestLite/TensorSuggestLite.app`.
-- Abrela con Finder o desde terminal:
+- No input validation (well-formed files required)
+- Single-threaded training (may freeze GUI briefly)
+- No hyperparameter tuning interface
+- No real-time evaluation metrics
+- Basic model architecture (not SOTA)
 
-```bash
-open dist/TensorSuggestLite/TensorSuggestLite.app
-# o para ver logs/errores
-./dist/TensorSuggestLite/TensorSuggestLite.app/Contents/MacOS/TensorSuggestLite
-```
+See [REPOSITORY_STATUS.md](REPOSITORY_STATUS.md) for complete details.
 
-Notas importantes:
+### Roadmap
 
-- Por defecto el build NO incluye TensorFlow (recomendado). Incluir TensorFlow hace que la app pese mucho y requiere compatibilidad de arquitectura (x86_64 vs arm64).
-- Los recursos estáticos incluidos: `icons/`, `styles_dark.qss`, `styles_light.qss`.
-- No se recomienda escribir dentro del bundle `.app` en tiempo de ejecución. Los modelos/artefactos generados deben guardarse en `~/Library/Application Support/TensorSuggestLite/` o en `generated/` fuera del bundle. Si necesitas que la app escriba modelos, considera ajustar rutas en los `trainer.py`.
-- Para distribución pública necesitarás firmar (`codesign`) y notarizar la app (Apple Developer ID). Eso no está automatizado en el script.
+- [ ] CLI mode for headless operation
+- [ ] Input validation and error recovery
+- [ ] Model evaluation metrics display
+- [ ] Hyperparameter configuration UI
+- [ ] Batch processing support
 
-Errores comunes y soluciones:
+## Contributing
 
-- "missing Qt platform plugin" — asegúrate de ejecutar el script en un entorno que tenga PyQt6 instalado; el spec intenta incluir los plugins `platforms` de PyQt6.
-- Problemas por falta de módulos (ImportError) — revisa la salida de PyInstaller y añade `hiddenimports` en el spec si es necesario.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Development setup
+- Code standards
+- Pull request process
+- Review criteria
+
+**Priority Areas**:
+1. Input validation
+2. Test coverage (pytest)
+3. CLI mode implementation
+4. Documentation improvements
+
+Before contributing, read our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+For security vulnerabilities, see [SECURITY.md](SECURITY.md).
+
+**Do not** report security issues via GitHub Issues.
+
+**Contact**: security.sxnnyside@sxnnysideproject.com
+
+## License
+
+This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+
+Copyright (c) 2025-2026 CoreRed Project
+
+## Support
+
+- **Documentation**: See `docs/` directory
+- **Issues**: [GitHub Issues](https://github.com/Sxnnyside-Project/TensorSuggestLite/issues)
+- **Email**: support.sxnnyside@sxnnysideproject.com
+- **Maintainer**: houjou.sxnnyside@sxnnysideproject.com
+
+---
+
+<p align="center">
+  <sub>Built with discipline by <a href="https://github.com/Sxnnyside-Project">CoreRed Project</a></sub>
+</p>
+

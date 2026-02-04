@@ -1,15 +1,27 @@
-"""Punto de entrada y ventana principal de TensorSuggestLite.
+"""TensorSuggestLite - Main GUI Application.
 
-Este módulo contiene la ventana principal con la lógica mínima para:
-- importar archivos (JSON/YAML/TOML),
-- iniciar entrenamiento usando los 'trainer' del intérprete correspondiente,
-- vigilar la carpeta generated/<kind> para habilitar conversión/exportación,
-- aplicar estilos (QSS) claro/oscuro.
+This module contains the primary PyQt6 graphical interface for TensorSuggestLite,
+a tool for training TensorFlow/Keras text classification models from configuration
+files (JSON, YAML, TOML).
 
-Notas:
-- La mayoría del trabajo pesado (tokenizer/model/label) lo hacen los módulos en
-  json_interpreter/yaml_interpreter/toml_interpreter; aquí solo organizamos el
-  flujo y la UX.
+Architecture:
+    - Main window: TensorSuggestLiteUI (QWidget subclass)
+    - Threading: Training and conversion run in daemon threads
+    - Callbacks: Progress and logs communicated via Qt signals
+    - File watching: QFileSystemWatcher monitors artifact generation
+
+Responsibilities:
+    - Import configuration files (JSON/YAML/TOML)
+    - Initiate training via interpreter-specific trainers
+    - Monitor generated/ directory for artifacts
+    - Convert Keras models to TFLite format
+    - Export TFLite models
+    - Apply and toggle dark/light themes
+
+Notes:
+    - Heavy operations delegated to json_interpreter, yaml_interpreter, toml_interpreter
+    - UI updates must occur on the main Qt thread (via QTimer.singleShot or signals)
+    - TensorFlow is not imported here; trainers handle lazy imports
 """
 
 import sys
@@ -18,7 +30,7 @@ import os
 import queue
 import shutil
 
-# Imports de PyQt
+# PyQt imports
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSize, QFileSystemWatcher
 from PyQt6.QtGui import QFont, QIcon, QCursor
 from PyQt6.QtWidgets import (
@@ -40,29 +52,28 @@ from json_interpreter import trainer as json_trainer
 
 
 class TensorSuggestLiteUI(QWidget):
-    """Ventana principal de la aplicación.
+    """Main application window.
 
-    Responsabilidades:
-    - Construir la disposición principal y los widgets.
-    - Encauzar las acciones del usuario (importar, entrenar, convertir, exportar)
-      a los trainers correspondientes.
-    - Mostrar logs y progreso provenientes de los trainers (vía callbacks).
-    - Vigilar generated/<kind> para detectar artefactos y habilitar acciones.
+    Responsibilities:
+    - Build main layout and widgets.
+    - Route user actions (import, train, convert, export) to corresponding trainers.
+    - Display logs and progress from trainers (via callbacks).
+    - Monitor generated/<kind> to detect artifacts and enable actions.
     """
 
-    training_progress = pyqtSignal(int)  # progreso desde 0 a 100
-    log_signal = pyqtSignal(str)  # logs desde hilos
+    training_progress = pyqtSignal(int)  # progress from 0 to 100
+    log_signal = pyqtSignal(str)  # logs from threads
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("TensorSuggestLite")
         self.setFixedSize(820, 520)
 
-        # Estado
+        # State
         self.selected_path = None
         self.selected_kind = None  # 'json' | 'yaml' | 'toml'
 
-        # cola de progreso usada para trasladar actualizaciones desde hilos de fondo
+        # Progress queue used to transfer updates from background threads
         self._progress_queue = queue.Queue()
         self._progress_poller = QTimer(self)
         self._progress_poller.setInterval(100)
@@ -93,14 +104,14 @@ class TensorSuggestLiteUI(QWidget):
 
     # ---------- Estilos y tema ----------
     def apply_stylesheet_if_exists(self):
-        """Cargar y aplicar styles_{dark,light}.qss si existe en la raíz del paquete.
+        """Load and apply styles_{dark,light}.qss if it exists in package root.
 
-        Se fija la propiedad 'theme' en QApplication para que los QSS puedan
-        referenciarla; la aplicación del stylesheet es "best-effort" y los
-        fallos se ignoran para evitar que la UI se cierre.
+        Sets 'theme' property on QApplication so QSS can reference it;
+        stylesheet application is "best-effort" and failures are ignored
+        to prevent UI closure.
         """
         base = os.path.abspath(os.path.dirname(__file__))
-        qss_file = 'styles_dark.qss' if self._theme == 'dark' else 'styles_light.qss'
+        qss_file = os.path.join('styles', 'dark.qss' if self._theme == 'dark' else 'light.qss')
         qss_path = os.path.join(base, qss_file)
         if os.path.exists(qss_path):
             try:
@@ -126,10 +137,10 @@ class TensorSuggestLiteUI(QWidget):
                 pass
 
     def toggle_theme(self):
-        """Alternar entre tema 'dark' y 'light' y reaplicar stylesheet.
+        """Toggle between 'dark' and 'light' theme and reapply stylesheet.
 
-        El toggle muestra el icono de acción (p. ej. sol cuando el tema actual es
-        oscuro para indicar cambiar a claro) y actualiza el tooltip.
+        The toggle shows the action icon (e.g. sun when current theme is
+        dark to indicate switching to light) and updates the tooltip.
         """
         self._theme = 'dark' if self._theme == 'light' else 'light'
         app = QApplication.instance()
@@ -139,7 +150,7 @@ class TensorSuggestLiteUI(QWidget):
             except Exception:
                 pass
 
-        # actualizar icono del toggle (mejor esfuerzo)
+        # Update toggle icon (best effort)
         try:
             icon_path = self.sun_icon_path if self._theme == 'dark' else self.moon_icon_path
             if icon_path and os.path.exists(icon_path):
@@ -151,7 +162,7 @@ class TensorSuggestLiteUI(QWidget):
             pass
 
         try:
-            tt = 'Cambiar a modo claro' if self._theme == 'dark' else 'Cambiar a modo oscuro'
+            tt = 'Switch to light mode' if self._theme == 'dark' else 'Switch to dark mode'
             try:
                 self.theme_toggle.setToolTip(tt)
             except Exception:
@@ -159,21 +170,21 @@ class TensorSuggestLiteUI(QWidget):
         except Exception:
             pass
 
-        # reaplicar QSS
+        # Reapply QSS
         self.apply_stylesheet_if_exists()
 
-    # ---------- Construcción de la UI ----------
+    # ---------- UI Construction ----------
     def _build_ui(self):
-        """Crear y disponer widgets.
+        """Create and layout widgets.
 
-        Mantener el código de layout aislado para facilitar refactors futuros.
+        Keep layout code isolated to facilitate future refactors.
         """
         title_font = QFont("Segoe UI", 16, QFont.Weight.Bold)
         copy_font = QFont("Segoe UI", 9)
         btn_font = QFont("Segoe UI", 11)
         path_font = QFont("Segoe UI", 10)
 
-        # Barra de aplicación
+        # Application bar
         app_bar = QWidget(self)
         app_bar.setObjectName('appBar')
         try:
@@ -187,7 +198,7 @@ class TensorSuggestLiteUI(QWidget):
         self.title_label.setFont(title_font)
         self.title_label.setObjectName('appTitle')
 
-        # Icono pequeño de la aplicación a la izquierda del título (leading side)
+        # Small app icon to the left of title (leading side)
         self.app_icon = QLabel(self)
         self.app_icon.setObjectName('appIcon')
         try:
@@ -202,7 +213,7 @@ class TensorSuggestLiteUI(QWidget):
                 except Exception:
                     pass
             else:
-                # Si no existe el svg, ocultar el widget para no afectar layout
+                # If svg doesn't exist, hide widget to not affect layout
                 self.app_icon.setVisible(False)
         except Exception:
             try:
@@ -210,7 +221,7 @@ class TensorSuggestLiteUI(QWidget):
             except Exception:
                 pass
 
-        # Botón de alternar tema (derecha)
+        # Theme toggle button (right side)
         self.theme_toggle = QToolButton(self)
         icons_dir = os.path.join(os.path.dirname(__file__), 'icons')
         self.sun_icon_path = os.path.join(icons_dir, 'sun.svg')
@@ -229,7 +240,7 @@ class TensorSuggestLiteUI(QWidget):
         except Exception:
             pass
         try:
-            tt = 'Cambiar a modo claro' if self._theme == 'dark' else 'Cambiar a modo oscuro'
+            tt = 'Switch to light mode' if self._theme == 'dark' else 'Switch to dark mode'
             self.theme_toggle.setToolTip(tt)
         except Exception:
             pass
@@ -238,14 +249,14 @@ class TensorSuggestLiteUI(QWidget):
         self.theme_toggle.setObjectName('themeToggle')
         self.theme_toggle.setFixedSize(36, 32)
 
-        # Colocar primero el icono (leading) y luego el título
+        # Place icon first (leading) then title
         app_bar_layout.addWidget(self.app_icon)
         app_bar_layout.addWidget(self.title_label)
         app_bar_layout.addStretch(1)
         app_bar_layout.addWidget(self.theme_toggle)
         self.app_bar = app_bar
 
-        # Panel izquierdo: importación, ruta y consola
+        # Left panel: import, path and console
         left_panel = QWidget(self)
         left_panel.setObjectName('leftPanel')
         try:
@@ -255,9 +266,9 @@ class TensorSuggestLiteUI(QWidget):
         left_layout = QVBoxLayout(left_panel)
         left_layout.setSpacing(10)
 
-        self.btn_json = QPushButton("Importar JSON")
-        self.btn_toml = QPushButton("Importar TOML")
-        self.btn_yaml = QPushButton("Importar YAML")
+        self.btn_json = QPushButton("Import JSON")
+        self.btn_toml = QPushButton("Import TOML")
+        self.btn_yaml = QPushButton("Import YAML")
         for b, kind in ((self.btn_json, 'json'), (self.btn_toml, 'toml'), (self.btn_yaml, 'yaml')):
             b.setFont(btn_font)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -274,20 +285,20 @@ class TensorSuggestLiteUI(QWidget):
         self.path_field = QLineEdit()
         self.path_field.setReadOnly(True)
         self.path_field.setFont(path_font)
-        self.path_field.setPlaceholderText('Ruta del archivo importado...')
+        self.path_field.setPlaceholderText('Imported file path...')
         self.path_field.setObjectName('pathField')
         self.path_field.setFixedHeight(40)
 
         self.log_widget = QTextEdit()
         self.log_widget.setReadOnly(True)
         self.log_widget.setObjectName('consoleBox')
-        self.log_widget.setPlaceholderText('Salida de consola...')
+        self.log_widget.setPlaceholderText('Console output...')
 
         left_layout.addLayout(import_row)
         left_layout.addWidget(self.path_field)
         left_layout.addWidget(self.log_widget, 1)
 
-        # Copyright pequeño bajo la consola
+        # Small copyright below console
         self.copyright_label = QLabel('TensorSuggestLite © Core Red 2025')
         self.copyright_label.setFont(copy_font)
         self.copyright_label.setObjectName('copyrightLabel')
@@ -306,32 +317,32 @@ class TensorSuggestLiteUI(QWidget):
         right_layout = QVBoxLayout(right_panel)
         right_layout.setSpacing(10)
 
-        self.train_button = QPushButton('Entrenar modelo')
+        self.train_button = QPushButton('Train Model')
         self.train_button.setFont(btn_font)
         self.train_button.setEnabled(False)
         self.train_button.clicked.connect(self._on_train_clicked)
         self.train_button.setObjectName('neumoButton')
 
-        self.convert_button = QPushButton('Generar TFLite')
+        self.convert_button = QPushButton('Generate TFLite')
         self.convert_button.setFont(btn_font)
         self.convert_button.setEnabled(False)
         self.convert_button.clicked.connect(self._on_convert_clicked)
         self.convert_button.setObjectName('neumoButton')
 
-        self.clear_button = QPushButton('Limpiar carpetas generadas')
+        self.clear_button = QPushButton('Clear Generated Folders')
         self.clear_button.setFont(btn_font)
         self.clear_button.setEnabled(True)
         self.clear_button.clicked.connect(lambda _: self._clear_generated(self.selected_kind or 'json'))
         self.clear_button.setObjectName('neumoButton')
 
         # Nuevo: botón para limpiar la consola (consoleBox)
-        self.clear_screen_button = QPushButton('Limpiar pantalla')
+        self.clear_screen_button = QPushButton('Clear Screen')
         self.clear_screen_button.setFont(btn_font)
         self.clear_screen_button.setEnabled(True)
         self.clear_screen_button.clicked.connect(self._clear_console)
         self.clear_screen_button.setObjectName('neumoButton')
 
-        self.export_button = QPushButton('Exportar TFLite')
+        self.export_button = QPushButton('Export TFLite')
         self.export_button.setFont(btn_font)
         self.export_button.setVisible(False)
         self.export_button.setEnabled(False)
@@ -354,7 +365,7 @@ class TensorSuggestLiteUI(QWidget):
 
         # Label de estado encima del progress
         status_font = QFont("Segoe UI", 10)
-        self.status_label = QLabel('modelo sin entrenar')
+        self.status_label = QLabel('model not trained')
         self.status_label.setFont(status_font)
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -382,48 +393,48 @@ class TensorSuggestLiteUI(QWidget):
 
     # ---------- Helpers: importación/selección/logs ----------
     def _import_file_dialog(self, kind: str):
-        """Abrir diálogo de archivo y delegar la selección a _on_file_selected."""
+        """Open file dialog and delegate selection to _on_file_selected."""
         if kind == 'json':
             filter = 'JSON files (*.json)'
         elif kind == 'yaml':
             filter = 'YAML files (*.yaml *.yml)'
         else:
             filter = 'TOML files (*.toml)'
-        dlg_title = f'Seleccionar archivo ({kind.upper()})'
+        dlg_title = f'Select file ({kind.upper()})'
         path, _ = QFileDialog.getOpenFileName(self, dlg_title, '', filter)
         if path:
             try:
                 self._on_file_selected(path, kind)
             except Exception:
-                # fallback mínimo: registrar selección y habilitar botón de entrenar
+                # Minimal fallback: register selection and enable train button
                 self.selected_path = path
                 self.selected_kind = kind
                 self.path_field.setText(path)
                 self._set_button_enabled(self.train_button, True)
-                self._append_log(f'Archivo seleccionado: {path}\nTipo: {kind}')
+                self._append_log(f'File selected: {path}\nType: {kind}')
 
     def _on_file_selected(self, path: str, kind: str):
-        """Manejador central cuando el usuario selecciona un archivo.
+        """Central handler when user selects a file.
 
-        Establece el estado interno, actualiza botones según artefactos ya
-        generados y arranca el watcher para detectar creación futura de artefactos.
+        Sets internal state, updates buttons based on already-generated artifacts,
+        and starts watcher to detect future artifact creation.
         """
         self.selected_path = path
         self.selected_kind = kind
         self.path_field.setText(path)
-        # Siempre partir del estado 'modelo sin entrenar' al seleccionar un archivo.
-        QTimer.singleShot(0, lambda: self.status_label.setText('modelo sin entrenar'))
-        # habilitar siempre entrenar una vez seleccionado un archivo
+        # Always start from 'model not trained' state when selecting a file
+        QTimer.singleShot(0, lambda: self.status_label.setText('model not trained'))
+        # Always enable train button once file is selected
         self._set_button_enabled(self.train_button, True)
-        # resetear visibilidad de export hasta confirmar que existe el tflite
+        # Reset export visibility until confirming tflite exists
         self.export_button.setVisible(False)
         self._set_button_enabled(self.export_button, False)
 
         try:
             chk = self._check_generated_files_exist(kind)
             if chk.get('all_exist', False):
-                # Si ya existen los artefactos, habilitar conversión/export pero
-                # no cambiar el status (el usuario quiere partir de 'sin entrenar').
+                # If artifacts already exist, enable conversion/export but
+                # don't change status (user wants to start from 'not trained')
                 self._set_button_enabled(self.convert_button, True)
                 tflite_path = os.path.join(chk.get('gen_dir', ''), 'text_classifier.tflite')
                 if os.path.exists(tflite_path):
@@ -433,20 +444,20 @@ class TensorSuggestLiteUI(QWidget):
                 self._set_button_enabled(self.convert_button, False)
         except Exception:
             self._set_button_enabled(self.convert_button, False)
-            # mantener 'modelo sin entrenar' en caso de error
+            # Keep 'model not trained' in case of error
 
         try:
             self._start_generated_watcher(kind)
         except Exception:
             pass
 
-        self._append_log(f'Archivo seleccionado: {path}\nTipo: {kind}')
+        self._append_log(f'File selected: {path}\nType: {kind}')
 
     def _append_log(self, text: str):
-        """Añadir una línea a la consola desde cualquier hilo (encolado al hilo UI).
+        """Append line to console from any thread (queued to UI thread).
 
-        Además, inspecciona mensajes clave producidos por los trainers para
-        actualizar validaciones y habilitar botones sin forzar progreso.
+        Also inspects key messages produced by trainers to update
+        validations and enable buttons without forcing progress.
         """
         def _do():
             try:
@@ -468,19 +479,19 @@ class TensorSuggestLiteUI(QWidget):
                         if chk.get('all_exist', False):
                             self._set_button_enabled(self.convert_button, True)
                             # actualizar estado si procedente
-                            if self.status_label.text().lower() != 'modelo entrenado':
-                                self.status_label.setText('modelo entrenado')
+                            if self.status_label.text().lower() != 'model trained':
+                                self.status_label.setText('model trained')
                     except Exception:
                         pass
 
                 # Si se guardó el TFLite, mostrar y habilitar el botón de exportar
-                if 'tflite guardado' in low or 'tflite' in low and ('guard' in low or 'saved' in low or 'tflite guardado' in low or 'conversión completada' in low or 'text_classifier.tflite' in low):
+                if 'tflite saved' in low or ('tflite' in low and ('saved' in low or 'conversion complete' in low or 'text_classifier.tflite' in low)):
                     try:
                         self.export_button.setVisible(True)
                         self._set_button_enabled(self.export_button, True)
                         # si estábamos generando, actualizar status
-                        if 'generando' in (self.status_label.text() or '').lower():
-                            self.status_label.setText('tflite generado exitosamente')
+                        if 'generating' in (self.status_label.text() or '').lower():
+                            self.status_label.setText('tflite generated successfully')
                     except Exception:
                         pass
 
@@ -488,7 +499,7 @@ class TensorSuggestLiteUI(QWidget):
                 if 'error' in low or 'exception' in low:
                     try:
                         # no forzamos progreso, solo mostrar estado de error
-                        self.status_label.setText('error en proceso')
+                        self.status_label.setText('process error')
                     except Exception:
                         pass
             except Exception:
@@ -497,10 +508,10 @@ class TensorSuggestLiteUI(QWidget):
         QTimer.singleShot(0, _do)
 
     def _set_button_enabled(self, button: 'QPushButton', enabled: bool):
-        """Habilitar/deshabilitar un QPushButton y forzar repintado.
+        """Enable/disable a QPushButton and force repaint.
 
-        Además fija la propiedad 'enabled' para que los QSS puedan coincidir,
-        fuerza un repolish y ajusta el cursor para mayor claridad UX.
+        Also sets 'enabled' property so QSS can match,
+        forces repolish and adjusts cursor for better UX clarity.
         """
         try:
             button.setEnabled(bool(enabled))
@@ -540,9 +551,9 @@ class TensorSuggestLiteUI(QWidget):
         except Exception:
             pass
 
-    # ---------- Watcher / helpers para generated ----------
+    # ---------- Watcher / helpers for generated ----------
     def _check_generated_files_exist(self, kind: str):
-        """Devolver un dict indicando si existen los artefactos tokenizer/model/label."""
+        """Return dict indicating if tokenizer/model/label artifacts exist."""
         root = os.path.abspath(os.path.dirname(__file__))
         gen_dir = os.path.join(root, 'generated', kind)
         files = ('tokenizer.json', 'text_classifier.keras', 'label_encoder.json')
@@ -550,10 +561,10 @@ class TensorSuggestLiteUI(QWidget):
         return {'all_exist': all_exist, 'gen_dir': gen_dir}
 
     def _start_generated_watcher(self, kind: str):
-        """Comenzar a vigilar generated/<kind> (o generated/) y arrancar polling.
+        """Start watching generated/<kind> (or generated/) and start polling.
 
-        El watcher registra si los archivos ya existían al iniciar para que solo
-        habilite el botón de conversión al producirse la transición a "all exist".
+        Watcher records if files already existed at start so it only
+        enables conversion button when transition to "all exist" occurs.
         """
         root = os.path.abspath(os.path.dirname(__file__))
         gen_dir = os.path.join(root, 'generated', kind)
@@ -600,25 +611,25 @@ class TensorSuggestLiteUI(QWidget):
             pass
 
     def _on_directory_changed(self, path: str):
-        """Callback para QFileSystemWatcher.directoryChanged; habilita conversión en la transición."""
+        """Callback for QFileSystemWatcher.directoryChanged; enables conversion on transition."""
         try:
             kind = self._watched_kind or 'json'
             chk = self._check_generated_files_exist(kind)
             if chk.get('all_exist', False) and not self._initial_all_exist:
-                self._append_log(f'Archivos generados detectados en: {chk.get("gen_dir")}.')
+                self._append_log(f'Generated files detected in: {chk.get("gen_dir")}.')
                 self._set_button_enabled(self.convert_button, True)
                 self._stop_generated_watcher()
         except Exception:
             pass
 
     def _poll_generated(self):
-        """Polling fallback que replica el comportamiento de directoryChanged."""
+        """Polling fallback that replicates directoryChanged behavior."""
         try:
             if not self._watched_kind:
                 return
             chk = self._check_generated_files_exist(self._watched_kind)
             if chk.get('all_exist', False) and not self._initial_all_exist:
-                self._append_log(f'Archivos generados detectados en: {chk.get("gen_dir")}.')
+                self._append_log(f'Generated files detected in: {chk.get("gen_dir")}.')
                 self._set_button_enabled(self.convert_button, True)
                 self._stop_generated_watcher()
         except Exception:
@@ -641,7 +652,7 @@ class TensorSuggestLiteUI(QWidget):
         self._watched_kind = None
 
     def _clear_generated(self, kind: str):
-        """Eliminar artefactos generados previamente para un retrain limpio."""
+        """Delete previously generated artifacts for clean retrain."""
         try:
             root = os.path.abspath(os.path.dirname(__file__))
             gen_dir = os.path.join(root, 'generated', kind)
@@ -671,7 +682,7 @@ class TensorSuggestLiteUI(QWidget):
             pass
 
     def _clear_console(self):
-        """Limpiar el contenido del consoleBox (log_widget)."""
+        """Clear consoleBox (log_widget) content."""
         try:
             self.log_widget.clear()
         except Exception:
@@ -702,15 +713,15 @@ class TensorSuggestLiteUI(QWidget):
                 current = ''
             try:
                 if v >= 100:
-                    if 'entrenando' in current:
+                    if 'training' in current:
                         # confiar en que trainer llegó a 100 por sí mismo
-                        self.status_label.setText('modelo entrenado')
+                        self.status_label.setText('model trained')
                         # habilitar conversión si los archivos existen
                         chk = self._check_generated_files_exist(self.selected_kind or 'json')
                         if chk.get('all_exist', False):
                             self._set_button_enabled(self.convert_button, True)
-                    elif 'generando' in current or 'convert' in current or 'tflite' in current:
-                        self.status_label.setText('tflite generado exitosamente')
+                    elif 'generating' in current or 'convert' in current or 'tflite' in current:
+                        self.status_label.setText('tflite generated successfully')
                         self.export_button.setVisible(True)
                         self._set_button_enabled(self.export_button, True)
             except Exception:
@@ -747,7 +758,7 @@ class TensorSuggestLiteUI(QWidget):
         self._set_button_enabled(self.train_button, False)
         self.progress.setValue(0)
         # indicar estado de entrenamiento en la UI
-        QTimer.singleShot(0, lambda: self.status_label.setText('entrenando modelo'))
+        QTimer.singleShot(0, lambda: self.status_label.setText('training model'))
         thread = threading.Thread(target=self._train_worker, daemon=True)
         thread.start()
 
@@ -768,7 +779,7 @@ class TensorSuggestLiteUI(QWidget):
                 train_fn = getattr(trainer, 'train_from_toml')
 
             if trainer is None or train_fn is None:
-                raise RuntimeError('No se ha seleccionado un trainer válido para el archivo importado.')
+                raise RuntimeError('No valid trainer selected for imported file.')
 
             def progress_cb(p):
                 v = int(max(0, min(100, int(p))))
@@ -781,17 +792,17 @@ class TensorSuggestLiteUI(QWidget):
                     except Exception:
                         pass
                 try:
-                    self.log_signal.emit(f'Progreso: {v}%')
+                    self.log_signal.emit(f'Progress: {v}%')
                 except Exception:
                     try:
-                        QTimer.singleShot(0, lambda vv=v: self._append_log(f'Progreso: {vv}%'))
+                        QTimer.singleShot(0, lambda vv=v: self._append_log(f'Progress: {vv}%'))
                     except Exception:
                         pass
 
-            # wrapper para el log que es seguro desde hilos y que asegura append_log en hilo UI
+            # Wrapper for log that is thread-safe and ensures append_log on UI thread
             def _trainer_log_wrapper(msg: str):
                 try:
-                    # usar la señal para enviar al hilo UI
+                    # Use signal to send to UI thread
                     self.log_signal.emit(msg)
                 except Exception:
                     try:
@@ -802,20 +813,20 @@ class TensorSuggestLiteUI(QWidget):
                         except Exception:
                             pass
 
-            # Llamar al trainer pasando nuestros callbacks; el trainer es quien
-            # debe decidir y enviar progresos y logs reales.
+            # Call trainer passing our callbacks; trainer decides
+            # and sends real progress and logs
             try:
                 result = train_fn(self.selected_path, progress_cb, log_cb=_trainer_log_wrapper)
             except TypeError:
                 result = train_fn(self.selected_path, progress_cb)
 
-            # Validación post-trainer: comprobar si el trainer creó los artefactos
+            # Post-trainer validation: check if trainer created artifacts
             try:
                 chk = self._check_generated_files_exist(self.selected_kind or 'json')
                 if chk.get('all_exist', False):
-                    QTimer.singleShot(0, lambda: self._append_log(f'Entrenamiento finalizado: artefactos detectados en {chk.get("gen_dir")}'))
+                    QTimer.singleShot(0, lambda: self._append_log(f'Training complete: artifacts detected in {chk.get("gen_dir")}'))
                     QTimer.singleShot(0, lambda: self._set_button_enabled(self.convert_button, True))
-                    QTimer.singleShot(0, lambda: self.status_label.setText('modelo entrenado'))
+                    QTimer.singleShot(0, lambda: self.status_label.setText('model trained'))
                 else:
                     # Si trainer devolvió rutas explícitas en el result, comprobarlas también
                     try:
@@ -823,16 +834,16 @@ class TensorSuggestLiteUI(QWidget):
                         mod = result.get('model_path') if isinstance(result, dict) else None
                         lab = result.get('label_encoder_path') if isinstance(result, dict) else None
                         if tok and mod and lab and all(os.path.exists(p) for p in (tok, mod, lab)):
-                            QTimer.singleShot(0, lambda: self._append_log('Entrenamiento finalizado: artefactos detectados (rutas devueltas por trainer).'))
+                            QTimer.singleShot(0, lambda: self._append_log('Training complete: artifacts detected (paths returned by trainer).'))
                             QTimer.singleShot(0, lambda: self._set_button_enabled(self.convert_button, True))
-                            QTimer.singleShot(0, lambda: self.status_label.setText('modelo entrenado'))
+                            QTimer.singleShot(0, lambda: self.status_label.setText('model trained'))
                     except Exception:
                         pass
             except Exception:
                 pass
         except Exception as e:
-            QTimer.singleShot(0, lambda: self._append_log(f'Error en entrenamiento: {e}'))
-            QTimer.singleShot(0, lambda: self.status_label.setText('error al entrenar'))
+            QTimer.singleShot(0, lambda: self._append_log(f'Training error: {e}'))
+            QTimer.singleShot(0, lambda: self.status_label.setText('training error'))
             # No forzar progreso en caso de error; confiar en mensajes del trainer.
         finally:
             QTimer.singleShot(0, lambda: self._set_button_enabled(self.train_button, True))
@@ -854,8 +865,8 @@ class TensorSuggestLiteUI(QWidget):
     def _on_convert_clicked(self):
         self._set_button_enabled(self.convert_button, False)
         self.progress.setValue(0)
-        # indicar inicio de conversión
-        QTimer.singleShot(0, lambda: self.status_label.setText('generando tflite'))
+        # Indicate conversion start
+        QTimer.singleShot(0, lambda: self.status_label.setText('generating tflite'))
         thread = threading.Thread(target=self._convert_worker, daemon=True)
         thread.start()
 
@@ -874,9 +885,9 @@ class TensorSuggestLiteUI(QWidget):
                 from toml_interpreter import trainer as toml_trainer
                 trainer = toml_trainer
             else:
-                raise RuntimeError(f"Tipo desconocido para conversión: {kind}")
+                raise RuntimeError(f"Unknown type for conversion: {kind}")
 
-            # Pasar callbacks para que el trainer reporte progreso y logs.
+            # Pass callbacks so trainer reports progress and logs
             def _conv_progress(p):
                 v = int(max(0, min(100, int(p))))
                 try:
@@ -887,10 +898,10 @@ class TensorSuggestLiteUI(QWidget):
                     except Exception:
                         pass
                 try:
-                    self.log_signal.emit(f'Conversión progreso: {v}%')
+                    self.log_signal.emit(f'Conversion progress: {v}%')
                 except Exception:
                     try:
-                        QTimer.singleShot(0, lambda pp=v: self._append_log(f'Conversión progreso: {pp}%'))
+                        QTimer.singleShot(0, lambda pp=v: self._append_log(f'Conversion progress: {pp}%'))
                     except Exception:
                         pass
 
@@ -908,31 +919,31 @@ class TensorSuggestLiteUI(QWidget):
 
             out_path = trainer.convert_to_tflite(model_dir=gen_model_path, progress_cb=_conv_progress, log_cb=_conv_log)
 
-            # Actualizar UI según retorno (sin forzar progreso). El trainer
-            # debe enviar los callbacks para progreso y logs; aquí solo mostramos
-            # un mensaje de éxito y habilitamos export si corresponde.
-            QTimer.singleShot(0, lambda: self._append_log(f'Conversión completada: {out_path}'))
-            QTimer.singleShot(0, lambda: self.status_label.setText('tflite generado exitosamente'))
+            # Update UI based on return (without forcing progress). Trainer
+            # should send callbacks for progress and logs; here just show
+            # success message and enable export if appropriate
+            QTimer.singleShot(0, lambda: self._append_log(f'Conversion complete: {out_path}'))
+            QTimer.singleShot(0, lambda: self.status_label.setText('tflite generated successfully'))
             QTimer.singleShot(0, lambda: self.export_button.setVisible(True))
             QTimer.singleShot(0, lambda: self._set_button_enabled(self.export_button, True))
         except Exception as e:
-            QTimer.singleShot(0, lambda: self._append_log(f'Error al convertir: {e}'))
-            QTimer.singleShot(0, lambda: self.status_label.setText('error generando tflite'))
-            # No forzar progreso en caso de error; confiar en mensajes del trainer.
+            QTimer.singleShot(0, lambda: self._append_log(f'Conversion error: {e}'))
+            QTimer.singleShot(0, lambda: self.status_label.setText('tflite generation error'))
+            # Don't force progress on error; trust trainer messages
         finally:
             QTimer.singleShot(0, lambda: self._set_button_enabled(self.convert_button, True))
 
     def _on_export_clicked(self):
-        dlg_title = "Guardar TFLite"
+        dlg_title = "Save TFLite"
         kind = (self.selected_kind or 'json')
         src_default = os.path.join(os.getcwd(), 'generated', kind, 'text_classifier.tflite')
         dst, _ = QFileDialog.getSaveFileName(self, dlg_title, src_default, "TFLite files (*.tflite)")
         if dst:
             try:
                 shutil.copy(src_default, dst)
-                self._append_log(f"Exportado: {dst}")
+                self._append_log(f"Exported: {dst}")
             except Exception as e:
-                self._append_log(f"Error al exportar: {e}")
+                self._append_log(f"Export error: {e}")
 
 
 def main():
