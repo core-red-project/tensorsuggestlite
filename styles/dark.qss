@@ -1,95 +1,114 @@
-/* Dark red palette - deep, high-contrast */
+/* Core Red Dark Obsidian Theme */
 QWidget {
-    background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #0b0a0b, stop:1 #151212);
-    color: #f7eaea;
+    background: #0d0f14;
+    color: #e5e7eb;
 }
 
-/* App bar */
+/* App Bar */
 QWidget#appBar {
-    background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #7f1d1d, stop:1 #5a1313);
-    color: #fff7f7;
-    padding: 10px 14px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1a0505, stop:0.5 #280a0a, stop:1 #111318);
+    border-bottom: 1px solid rgba(220, 38, 38, 0.25);
+    padding: 8px 16px;
 }
+
 QLabel#appTitle {
     background: transparent;
-    color: #fff7f7;
+    color: #ffffff;
     font-weight: 700;
-    font-size: 18px;
+    font-size: 17px;
+    letter-spacing: 0.5px;
     padding-left: 6px;
 }
 
-/* Theme toggle (icon-only, circular) */
-QToolButton#themeToggle {
-    border-radius: 16px;
-    min-width: 36px;
-    min-height: 36px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.03);
-}
-QToolButton#themeToggle:hover { background: rgba(255,255,255,0.06); }
-
-/* Neumorphic-like buttons */
-QPushButton#neumoButton {
-    border-radius: 12px;
-    padding: 8px 14px;
-    border: none;
-    /* brighter, contrasty enabled appearance */
-    background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #5a1515, stop:1 #7a1b1b);
-    color: #fff5f5;
-}
-QPushButton#neumoButton:pressed { background: #9a1b1b; }
-
-/* Disabled button state */
-QPushButton#neumoButton:disabled {
-    background: #241212; /* darker muted */
-    color: #6b5252; /* muted text */
-    border: 1px solid #1a0d0d;
-    opacity: 0.5;
-}
-
-/* make disabled look consistent for export button (also neumoButton) */
-QPushButton#neumoButton[enabled="false"] {
-    background: #241212;
-    color: #6b5252;
-    opacity: 0.5;
-}
-
-/* Console box */
-QTextEdit#consoleBox {
-    border-radius: 12px;
+/* Panels */
+QWidget#leftPanel {
+    background: #111318;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
     padding: 12px;
-    border: none;
-    background: qlineargradient(spread:pad, x1:0,y1:0,x2:0,y2:1, stop:0 #1b1212, stop:1 #1e1313);
-    color: #f5e4e4;
-    font-family: 'Consolas', 'Courier New', monospace;
 }
 
-/* Path field */
+QWidget#rightPanel {
+    background: #111318;
+    padding: 12px;
+}
+
+/* Theme Toggle */
+QToolButton#themeToggle {
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f3f4f6;
+}
+QToolButton#themeToggle:hover {
+    background: rgba(220, 38, 38, 0.2);
+    border-color: rgba(220, 38, 38, 0.4);
+}
+
+/* Buttons */
+QPushButton#neumoButton {
+    border-radius: 8px;
+    padding: 8px 14px;
+    border: 1px solid rgba(220, 38, 38, 0.35);
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #991b1b, stop:1 #7f1d1d);
+    color: #ffffff;
+    font-weight: 600;
+}
+QPushButton#neumoButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #b91c1c, stop:1 #991b1b);
+    border-color: #ef4444;
+}
+QPushButton#neumoButton:pressed {
+    background: #581414;
+}
+QPushButton#neumoButton:disabled {
+    background: #1c1e24;
+    color: #4b5563;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* Inputs and Console */
 QLineEdit#pathField {
-    border-radius: 12px;
-    padding: 0px 12px;
-    border: none;
-    background: qlineargradient(spread:pad, x1:0,y1:0,x2:0,y2:1, stop:0 #1e1313, stop:1 #1b1212);
-    color: #f5e4e4;
+    border-radius: 8px;
+    background: #181b22;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px 10px;
+    color: #9ca3af;
 }
 
-/* Progress bar */
+QTextEdit#consoleBox {
+    border-radius: 8px;
+    background: #090a0d;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    padding: 10px;
+    color: #38bdf8;
+    font-size: 11px;
+}
+
+/* Status and Progress */
+QLabel#statusLabel {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+    padding: 2px 8px;
+    color: #f87171;
+    font-weight: 600;
+    border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
 QProgressBar#progressBar {
-    border-radius: 9px;
-    background: #1f1616;
+    border-radius: 6px;
+    background: #181b22;
     text-align: center;
-    color: #e8d0d0;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 QProgressBar#progressBar::chunk {
-    border-radius: 9px;
-    background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #8b2020, stop:1 #6a1515);
+    border-radius: 5px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #b91c1c, stop:1 #ef4444);
 }
-
-/* Status label */
-QLabel#statusLabel { color: #e0c5c5; }
 
 QLabel#copyrightLabel {
-    color: #7a5555;
-    padding-top: 4px;
+    color: #4b5563;
+    font-size: 10px;
 }
-

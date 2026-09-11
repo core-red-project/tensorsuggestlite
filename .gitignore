@@ -29,6 +29,8 @@ dist-packages/
 /build/
 /dist/
 *.spec
+!tensorsuggestlite.spec
+!tensorsuggestlite-cli.spec
 *.app
 *.exe
 *.dmg
@@ -52,3 +54,6 @@ Desktop.ini
 # Temporary files
 *.tmp
 *.temp
+
+# Animoria cache & staged cleanup
+.animoria/

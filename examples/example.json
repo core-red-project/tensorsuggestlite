@@ -1,33 +1,50 @@
 {
   "POSITIVE": {
     "responses": [
-      {"response": "This is excellent!"},
-      {"response": "I love this product"},
-      {"response": "Great quality and fast delivery"},
-      {"response": "Highly recommended"},
-      {"response": "Exceeded my expectations"}
+      {"response": "This is excellent and works flawlessly!"},
+      {"response": "I love this product, it exceeded all my expectations."},
+      {"response": "Great quality and remarkably fast delivery."},
+      {"response": "Highly recommended to anyone looking for reliability."},
+      {"response": "Outstanding performance and intuitive design."},
+      {"response": "Really happy with the results so far."},
+      {"response": "The best experience I have had with this kind of tool."}
     ],
-    "synonyms": ["good", "great", "amazing", "wonderful", "fantastic"]
+    "synonyms": ["good", "great", "amazing", "wonderful", "fantastic", "superb", "brilliant"]
   },
   "NEGATIVE": {
     "responses": [
-      {"response": "This is terrible"},
-      {"response": "Very disappointing"},
-      {"response": "Waste of money"},
-      {"response": "Poor quality"},
-      {"response": "Would not recommend"}
+      {"response": "This is terrible and did not work as advertised."},
+      {"response": "Very disappointing experience overall."},
+      {"response": "Complete waste of money, would not recommend."},
+      {"response": "Poor build quality and broke within minutes."},
+      {"response": "Extremely frustrating and completely unusable."},
+      {"response": "Customer service was unhelpful and rude."},
+      {"response": "Do not buy this product, it is flawed."}
     ],
-    "synonyms": ["bad", "poor", "awful", "horrible", "disappointing"]
+    "synonyms": ["bad", "poor", "awful", "horrible", "disappointing", "terrible", "useless"]
   },
   "NEUTRAL": {
     "responses": [
-      {"response": "It's okay"},
-      {"response": "As described"},
-      {"response": "Average product"},
-      {"response": "Nothing special"},
-      {"response": "Meets basic expectations"}
+      {"response": "It is okay, performs as described in the specs."},
+      {"response": "Average product, nothing particularly special."},
+      {"response": "Meets basic expectations without any surprises."},
+      {"response": "Standard quality for the price point."},
+      {"response": "Neither good nor bad, just an ordinary item."},
+      {"response": "Does what it says on the tin."},
+      {"response": "Decent tool for simple everyday tasks."}
     ],
-    "synonyms": ["okay", "fine", "acceptable", "adequate", "standard"]
+    "synonyms": ["okay", "fine", "acceptable", "adequate", "standard", "average", "moderate"]
+  },
+  "INQUIRY": {
+    "responses": [
+      {"response": "How do I install this on macOS or Linux?"},
+      {"response": "Can you provide more information regarding the license?"},
+      {"response": "What are the recommended system requirements for training?"},
+      {"response": "Where can I find documentation on the TFLite exporter?"},
+      {"response": "Is there support for custom batch sizes and epochs?"},
+      {"response": "How can I export the model to another directory?"},
+      {"response": "Could you clarify the accepted input file formats?"}
+    ],
+    "synonyms": ["help", "question", "inquiry", "support", "details", "info", "guide"]
   }
 }
-
