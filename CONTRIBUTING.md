@@ -100,4 +100,4 @@ If something in the codebase is unclear, open an issue with the `question` label
 
 ---
 
-*TensorSuggestLite is A Core Red Project. Part of the [Sxnnyside Project](https://sxnnysideproject.com).*
+*TensorSuggestLite — A Core Red Project. Part of the [Sxnnyside Project](https://sxnnysideproject.com) ecosystem.*

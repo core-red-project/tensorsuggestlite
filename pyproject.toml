@@ -4,55 +4,58 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tensorsuggestlite"
-version = "2.0.0"
+version = "2.1.0"
 description = "Configuration-driven text classification models with TensorFlow/Keras and TFLite export"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
-license = "MIT"
+license = "MIT AND MPL-2.0"
 authors = [
-    { name = "HoujouSxnnyside", email = "houjou.sxnnyside@sxnnysideproject.com" }
+    { name = "Core Red Project" }
 ]
 dependencies = [
-    "tensorflow>=2.15.0",
     "numpy>=1.24.0,<2.0.0",
-    "scikit-learn>=1.5.0",
     "PyYAML>=6.0.0",
-    "toml>=0.10.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/core-red-project/tensorsuggestlite"
+Repository = "https://github.com/core-red-project/tensorsuggestlite"
+Issues = "https://github.com/core-red-project/tensorsuggestlite/issues"
 
 [project.scripts]
 tensorsuggestlite = "tensorsuggestlite.main:main"
 
 [project.optional-dependencies]
-gui = [
-    "PyQt6>=6.6.0",
+train = [
+    "tensorflow>=2.15.0",
+    "scikit-learn>=1.5.0",
 ]
-dev = [
-    "PyQt6>=6.6.0",
-    "ruff>=0.4.0",
-    "mypy>=1.10.0",
-    "pytest>=8.0.0",
-    "pre-commit>=3.7.0",
-    "pyinstaller>=6.0.0",
+gui = [
+    "dearpygui>=2.0.0",
+]
+full = [
+    "tensorflow>=2.15.0",
+    "scikit-learn>=1.5.0",
+    "dearpygui>=2.0.0",
 ]
 
 [dependency-groups]
 dev = [
-    "PyQt6>=6.6.0",
+    "tensorflow>=2.15.0",
+    "scikit-learn>=1.5.0",
+    "dearpygui>=2.0.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
     "pytest>=8.0.0",
     "pre-commit>=3.7.0",
     "pyinstaller>=6.0.0",
 ]
-
 
 [tool.hatch.build.targets.wheel]
 packages = [
     "src/tensorsuggestlite",
 ]
 include = [
-    "styles",
     "icons",
 ]
 
@@ -80,10 +83,16 @@ select = [
     "I",   # isort
     "UP",  # pyupgrade
     "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "N",   # pep8-naming
+    "C4",  # flake8-comprehensions
+    "PT",  # flake8-pytest-style
+    "RUF", # ruff-specific rules
 ]
 ignore = [
     "E501",  # line length handled by formatter
     "B008",  # function call in argument defaults
+    "N806",  # variable in function should be lowercase (math matrix notations X_train, y_train)
 ]
 
 [tool.ruff.format]
@@ -95,12 +104,29 @@ python_version = "3.11"
 mypy_path = "src"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = false
+disallow_untyped_defs = true
 check_untyped_defs = true
 no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = [
+    "dearpygui.*",
+    "tensorflow.*",
+    "sklearn.*",
+    "yaml.*",
+    "toml.*",
+    "ai_edge_litert.*",
+    "tflite_runtime.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
 strict_equality = true
 ignore_missing_imports = true
 
@@ -108,4 +134,4 @@ ignore_missing_imports = true
 minversion = "8.0"
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-v"
+addopts = "-ra --strict-markers -v"

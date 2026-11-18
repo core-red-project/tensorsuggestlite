@@ -26,6 +26,7 @@ dist-packages/
 # Build artifacts
 /generated/
 **/generated/
+/.tensorsuggestlite/
 /build/
 /dist/
 *.spec

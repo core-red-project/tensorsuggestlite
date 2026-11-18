@@ -5,7 +5,6 @@ block_cipher = None
 project_root = Path.cwd()
 
 datas = [
-    (str(project_root / "styles"), "styles"),
     (str(project_root / "icons"), "icons"),
     (str(project_root / "examples"), "examples"),
 ]
@@ -17,10 +16,11 @@ hiddenimports = [
     "tensorsuggestlite.ml",
     "tensorsuggestlite.use_cases",
     "tensorsuggestlite.ui",
+    "dearpygui",
+    "dearpygui.dearpygui",
     "sklearn.utils._typedefs",
     "sklearn.neighbors._typedefs",
     "yaml",
-    "toml",
 ]
 
 a = Analysis(

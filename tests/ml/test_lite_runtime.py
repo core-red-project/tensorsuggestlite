@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from tensorsuggestlite.core.entities import TrainingConfig, TrainingDataset
-from tensorsuggestlite.lite_runtime import LiteInferenceRunner, PureTextTokenizer
+from tensorsuggestlite.ml.lite_runtime import LiteInferenceRunner, PureTextTokenizer
 from tensorsuggestlite.use_cases import ExportTFLiteUseCase, TrainModelUseCase
 
 
@@ -19,7 +19,8 @@ def test_pure_text_tokenizer(tmp_path: Path, sample_dataset: TrainingDataset) ->
     assert len(seq) == 3
     padded = tokenizer.pad_sequence(seq, max_len=10)
     assert padded.shape == (1, 10)
-    assert padded.max() <= 1.0
+    assert padded.max() >= 1.0
+    assert padded[0, 0] > 0
 
 
 def test_lite_inference_runner(tmp_path: Path, sample_dataset: TrainingDataset) -> None:
@@ -36,5 +37,5 @@ def test_lite_inference_runner(tmp_path: Path, sample_dataset: TrainingDataset) 
     assert res.top_category in {"POSITIVE", "NEGATIVE"}
     assert 0.0 <= res.top_confidence <= 1.0
     assert len(res.scores) == 2
-    assert res.runtime == "lite_tflite"
+    assert res.runtime == "tflite"
     assert res.latency_ms > 0.0

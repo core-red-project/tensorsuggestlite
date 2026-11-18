@@ -4,9 +4,10 @@ set shell := ["bash", "-uc"]
 default:
     @just --list
 
-# Bootstrap dependencies and virtual environment
+# Bootstrap dependencies, virtual environment, and git hooks
 install:
     uv sync --all-extras
+    uv run pre-commit install --install-hooks -t pre-commit -t commit-msg
 
 # Start GUI application in development mode
 dev:
@@ -37,7 +38,6 @@ dmg: bundle-desktop
         echo "Skipping DMG creation: not running on macOS"; \
     fi
 
-
 # Run automated tests
 test:
     uv run pytest
@@ -53,9 +53,21 @@ lint:
 # Apply automatic formatting
 format:
     uv run ruff format src tests
+    uv run ruff check --fix src tests
 
-# Run full quality gate
-check: format lint typecheck test
+# Verify formatting without modifying files (non-mutating gate)
+format-check:
+    uv run ruff format --check src tests
+
+# Run full quality gate (non-mutating)
+check: format-check lint typecheck test
+
+# Benchmark startup time and core inspection operations
+bench:
+    @echo "=== Benchmarking CLI Startup ==="
+    time uv run python -m tensorsuggestlite.main --version
+    @echo "=== Benchmarking Configuration Inspection ==="
+    time uv run python -m tensorsuggestlite.main inspect examples/example.json
 
 # Remove build artifacts and temporary caches
 clean:

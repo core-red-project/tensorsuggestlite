@@ -16,16 +16,11 @@ hiddenimports = [
     "tensorsuggestlite.use_cases",
     "sklearn.utils._typedefs",
     "yaml",
-    "toml",
 ]
 
 excludes = [
-    "PyQt6",
-    "PyQt6.QtCore",
-    "PyQt6.QtGui",
-    "PyQt6.QtWidgets",
-    "PyQt6.sip",
-    "PyQt6.QtDBus",
+    "dearpygui",
+    "dearpygui.dearpygui",
     "tkinter",
 ]
 
@@ -50,28 +45,21 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
-    exclude_binaries=True,
     name="tensorsuggestlite-cli",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name="tensorsuggestlite-cli",
 )

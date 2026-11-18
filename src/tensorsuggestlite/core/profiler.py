@@ -1,4 +1,11 @@
-"""Dataset profiler for detecting anomalies, imbalance, and contradictions."""
+"""Dataset profiler for detecting anomalies, class imbalance, and label contradictions.
+
+Executes static data quality diagnostics prior to neural network compilation,
+identifying duplicate utterances, conflicting multi-class labelings, and extreme
+imbalance distributions.
+"""
+
+from __future__ import annotations
 
 from collections import Counter, defaultdict
 
@@ -6,11 +13,22 @@ from tensorsuggestlite.core.entities import DatasetProfileReport, TrainingDatase
 
 
 class DatasetProfiler:
-    """Profiles a TrainingDataset to detect data quality issues before training."""
+    """Profiles a TrainingDataset to detect data quality issues before model training."""
 
     @staticmethod
     def profile(dataset: TrainingDataset) -> DatasetProfileReport:
-        """Run full diagnostic analysis on a dataset."""
+        """Run full diagnostic profiling on an ingested TrainingDataset.
+
+        Evaluates sample frequencies per category, calculates the imbalance ratio
+        between the most and least frequent class, and detects both exact duplicates
+        and contradictory samples (identical text assigned to different categories).
+
+        Args:
+            dataset: Ingested TrainingDataset instance to analyze.
+
+        Returns:
+            DatasetProfileReport: Comprehensive diagnostics report detailing dataset integrity.
+        """
         total = len(dataset.samples)
         if total == 0:
             return DatasetProfileReport(
@@ -29,7 +47,9 @@ class DatasetProfiler:
         ratio = max_count / max(min_count, 1)
 
         warning: str | None = None
-        if total > 5:
+        if len(cat_counts) < 2:
+            warning = "Dataset contains fewer than 2 distinct classes. A classification model requires at least 2 distinct classes."
+        elif total > 5:
             if ratio > 4.0:
                 warning = f"Critical class imbalance: ratio {ratio:.1f}:1 between largest and smallest class."
             elif ratio > 2.5:
@@ -49,7 +69,7 @@ class DatasetProfiler:
         contradictions: list[tuple[str, list[str]]] = []
         for text, cats in text_to_categories.items():
             if len(cats) > 1:
-                contradictions.append((text, sorted(list(cats))))
+                contradictions.append((text, sorted(cats)))
 
         duplicates: list[tuple[str, str, int]] = []
         for (text, cat), count in text_cat_counts.items():
@@ -65,3 +85,6 @@ class DatasetProfiler:
             duplicate_samples=duplicates,
             contradictory_samples=contradictions,
         )
+
+
+__all__ = ["DatasetProfiler"]

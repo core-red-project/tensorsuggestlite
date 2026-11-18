@@ -1,0 +1,31 @@
+# GitAttributes for TensorSuggestLite
+# Ensure LF line endings across repository and checkouts
+* text=auto eol=lf
+
+# Windows command files
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets (prevent Git diffing and corruption)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.svg binary
+*.dmg binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.keras binary
+*.tflite binary
+*.pkl binary
+*.tar.gz binary
+*.zip binary
+
+# Generated lockfiles (minimize diff noise in reviews)
+uv.lock linguist-generated -diff
+

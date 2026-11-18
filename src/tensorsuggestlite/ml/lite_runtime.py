@@ -5,6 +5,8 @@ TFLite interpreter (ai-edge-litert or tflite-runtime), without requiring the ~50
 TensorFlow package.
 """
 
+from __future__ import annotations
+
 import json
 import re
 import time
@@ -35,11 +37,19 @@ def load_interpreter(model_path: Path | str) -> Any:
     except ImportError:
         pass
 
-    # 3. Fallback to tensorflow lite interpreter
+    # 3. Fallback to tensorflow lite interpreter with deprecation suppression
     try:
-        from tensorflow.lite.python.interpreter import Interpreter
+        import warnings
 
-        return Interpreter(model_path=str(model_path))
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message=".*Interpreter is deprecated.*",
+            )
+            from tensorflow.lite.python.interpreter import Interpreter
+
+            return Interpreter(model_path=str(model_path))
     except ImportError as err:
         raise InferenceError(
             "No compatible TFLite runtime found. Please install 'tflite-runtime', 'ai-edge-litert', or 'tensorflow'."
@@ -73,13 +83,12 @@ class PureTextTokenizer:
         return [self.word_index.get(w, self.oov_index) for w in words]
 
     def pad_sequence(self, sequence: list[int], max_len: int) -> np.ndarray:
-        """Pad sequence with post-zeros and normalize by vocabulary size."""
+        """Pad sequence with post-zeros."""
         arr = np.zeros((1, max_len), dtype=np.float32)
         take = min(len(sequence), max_len)
         if take > 0:
             arr[0, :take] = sequence[:take]
-        vocab_size = max(len(self.word_index), 1)
-        return arr / float(vocab_size)
+        return arr
 
 
 class LiteInferenceRunner:
@@ -135,5 +144,12 @@ class LiteInferenceRunner:
             top_confidence=top.confidence,
             scores=scores,
             latency_ms=latency_ms,
-            runtime="lite_tflite",
+            runtime="tflite",
         )
+
+
+__all__ = [
+    "LiteInferenceRunner",
+    "PureTextTokenizer",
+    "load_interpreter",
+]

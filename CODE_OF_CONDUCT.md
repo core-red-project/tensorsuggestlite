@@ -47,4 +47,4 @@ This Code of Conduct applies to all project spaces: issues, pull requests, commi
 
 ---
 
-*TensorSuggestLite is A Core Red Project. Part of the [Sxnnyside Project](https://sxnnysideproject.com).*
+*TensorSuggestLite — A Core Red Project. Part of the [Sxnnyside Project](https://sxnnysideproject.com) ecosystem.*

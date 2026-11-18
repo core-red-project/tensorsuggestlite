@@ -1,10 +1,14 @@
 # TensorSuggestLite
 
-![Banner](TensorSuggestLite.png)
+![TensorSuggestLite banner](docs/assets/tensorsuggestlite-banner.png)
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
-[![CI](https://github.com/core-red-project/tensorsuggestlite/workflows/CI/badge.svg)](https://github.com/core-red-project/tensorsuggestlite/actions)
+![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![License](https://img.shields.io/badge/License-MIT%20%2F%20MPL--2.0-green)
+[![CI](https://github.com/core-red-project/tensorsuggestlite/actions/workflows/ci.yml/badge.svg)](https://github.com/core-red-project/tensorsuggestlite/actions/workflows/ci.yml)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20Raspberry%20Pi-lightgrey)
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2)](https://discord.gg/h3hhNY8VTE)
+[![Patreon](https://img.shields.io/badge/Patreon-SxnnysideProject-F96854)](https://patreon.com/SxnnysideProject)
 
 <p align="center">
   <strong>Declarative ML ✦ Edge-Ready TFLite ✦ Zero-TensorFlow Inference</strong><br>
@@ -14,7 +18,7 @@
 <p align="center">
   <a href="#about">About</a> ✦
   <a href="#features">Features</a> ✦
-  <a href="#installation">Installation</a> ✦
+  <a href="#installation--distribution">Installation</a> ✦
   <a href="#usage">Usage</a> ✦
   <a href="#architecture">Architecture</a> ✦
   <a href="#contributing">Contributing</a>
@@ -32,9 +36,9 @@ The pipeline produces both a full Keras model for server workloads and a quantiz
 
 ### Philosophy
 
-> *"Configuration as training data."*
+> _"Configuration as training data."_
 
-This is a Core Red Project, part of the Sxnnyside Project's ecosystem.
+Part of the Core Red Project realm within the Sxnnyside Project ecosystem.
 
 ## Features
 
@@ -46,25 +50,50 @@ This is a Core Red Project, part of the Sxnnyside Project's ecosystem.
 - **Zero-TensorFlow Lightweight Runtime**: Standalone inference engine (`lite_runtime.py`) executing predictions with ~5 MB dependencies and ~1 ms latency.
 - **Dual Packaging**: Headless CLI for servers/containers alongside a native desktop GUI with dark/light themes.
 
-## Installation
+## Installation & Distribution
 
-### Prerequisites
+TensorSuggestLite is distributed through three official channels:
 
-- Python (3.11)
-- [uv](https://docs.astral.sh/uv/) (recommended task/package manager) or standard `pip`
-- [just](https://github.com/casey/just) (command runner for source builds)
+### 1. PyPI Package (`pip install`)
 
-### Package Installation
+Install via standard Python package managers:
 
 ```bash
-# Headless CLI only (lightweight, zero GUI dependencies)
+# Lightweight CLI & LiteRT edge inference engine (~15 MB, zero TensorFlow)
 pip install tensorsuggestlite
 
-# Full installation with desktop PyQt6 GUI
+# With model training & TFLite conversion support (TensorFlow + Scikit-Learn)
+pip install "tensorsuggestlite[train]"
+
+# With native Desktop GUI support (DearPyGui)
 pip install "tensorsuggestlite[gui]"
+
+# Complete suite (CLI + Training + GUI)
+pip install "tensorsuggestlite[full]"
 ```
 
-### From Source
+### 2. Standalone CLI Binary (GitHub Releases)
+
+Single-file self-contained executables with embedded runtime—no Python or system dependencies required:
+
+| Architecture / Platform                   | Target Triple               | Download Archive                                           |
+| ----------------------------------------- | --------------------------- | ---------------------------------------------------------- |
+| **Debian ARM64 (Raspberry Pi OS 64-bit)** | `aarch64-unknown-linux-gnu` | `tensorsuggestlite-cli-*-aarch64-unknown-linux-gnu.tar.gz` |
+| **Linux x86_64 (Ubuntu / Debian / RHEL)** | `x86_64-unknown-linux-gnu`  | `tensorsuggestlite-cli-*-x86_64-unknown-linux-gnu.tar.gz`  |
+| **macOS Apple Silicon (M1/M2/M3/M4)**     | `aarch64-apple-darwin`      | `tensorsuggestlite-cli-*-aarch64-apple-darwin.tar.gz`      |
+| **Windows x64**                           | `x86_64-pc-windows-msvc`    | `tensorsuggestlite-cli-*-x86_64-pc-windows-msvc.zip`       |
+
+Download the archive for your architecture from [GitHub Releases](https://github.com/core-red-project/tensorsuggestlite/releases), extract, and copy `tensorsuggestlite-cli` to your `PATH` (e.g. `/usr/local/bin`).
+
+### 3. Desktop GUI Application (GitHub Releases)
+
+Standalone native desktop application:
+
+- **macOS**: Drag-and-drop installer disk image (`tensorsuggestlite-gui-*-aarch64-apple-darwin.dmg`).
+- **Windows**: Self-contained ZIP archive (`tensorsuggestlite-gui-*-x86_64-pc-windows-msvc.zip`).
+- **Linux**: Compressed application tarball (`tensorsuggestlite-gui-*-x86_64-unknown-linux-gnu.tar.gz`).
+
+### 4. Build From Source
 
 ```bash
 git clone https://github.com/core-red-project/tensorsuggestlite.git
@@ -119,7 +148,7 @@ just dev
 For edge deployment or resource-constrained microservices without full TensorFlow:
 
 ```bash
-uv run python scripts/standalone_infer.py generated/json "Can you help me solve this?"
+tensorsuggestlite predict generated/json "Can you help me solve this?" --tflite
 ```
 
 ## Architecture
@@ -127,19 +156,19 @@ uv run python scripts/standalone_infer.py generated/json "Can you help me solve 
 ```
 tensorsuggestlite/
 ├── src/tensorsuggestlite/
-│   ├── core/         # Domain entities, protocols, profiler, and exceptions
-│   ├── parsers/      # Format parsers (JSON, YAML, TOML) with dynamic registry
-│   ├── ml/           # Keras training engine, TFLite exporter, and predictors
-│   ├── use_cases/    # Application workflows (Train, Export, Predict)
-│   ├── ui/           # PyQt6 interface, native fonts, worker threads, and themes
-│   ├── lite_runtime.py # Standalone Zero-TF inference runner
-│   └── main.py       # Dual-mode CLI/GUI entry point
-├── scripts/          # Standalone inference scripts
-├── styles/           # Dark and light QSS stylesheets
-├── examples/         # Verified multi-format training fixtures
-├── tests/            # Automated test suite (29 tests)
-└── Justfile          # Canonical engineering task recipes
+│   ├── core/         # Domain entities, protocols, profiler & exceptions (MIT)
+│   ├── cli/          # CLI commands, POSIX streams, manpage & suggestions (MIT)
+│   ├── ml/           # Model training, TFLite export & zero-TF inference (MIT)
+│   ├── parsers/      # Format parsers (JSON, YAML, TOML) & skeleton mapping (MIT)
+│   ├── use_cases/    # Application workflows (Train, Export, Predict) (MIT)
+│   └── ui/           # DearPyGui desktop graphical interface (MPL-2.0)
+├── docs/             # Visual branding and ecosystem documentation assets
+├── examples/         # Verified multi-format training fixtures (JSON, YAML, TOML)
+├── tests/            # Automated test suite mirroring src/ (66 tests)
+└── Justfile          # Canonical engineering task runner
 ```
+
+> **Note on Drag & Drop:** Native OS drag-and-drop onto the application window is **Experimental** (verified on macOS via Cocoa/Metal; unsupported on Windows/Linux).
 
 ## Contributing
 
@@ -149,7 +178,16 @@ Before contributing, read the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under a split open-source model:
+
+- **Core Engine & CLI (`core/`, `cli/`, `ml/`, `parsers/`, `use_cases/`, `main.py`)**: **MIT License** — see [LICENSE-MIT](LICENSE-MIT).
+- **Desktop Graphical Interface (`ui/`)**: **Mozilla Public License Version 2.0 (MPL-2.0)** — see [LICENSE-MPL-2.0](LICENSE-MPL-2.0).
+
+See the master [LICENSE](LICENSE) file for complete terms and the Artifact Ownership Notice.
+
+## External Listings
+
+- [AIBase — TensorSuggestLite](https://www.aibase.com/es/repos/project/tensorsuggestlite)
 
 ---
 

@@ -35,3 +35,11 @@ def test_import_use_cases():
     use_cases = importlib.import_module("tensorsuggestlite.use_cases")
     assert hasattr(use_cases, "TrainModelUseCase")
     assert hasattr(use_cases, "ExportTFLiteUseCase")
+
+
+def test_import_ui():
+    """Verify GUI modules import cleanly."""
+    ui = importlib.import_module("tensorsuggestlite.ui")
+    assert hasattr(ui, "TensorSuggestLiteUI")
+    assert hasattr(ui, "launch_gui")
+    assert hasattr(ui, "NativeDialogBridge")

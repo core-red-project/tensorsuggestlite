@@ -1,17 +1,23 @@
 """Unified Keras text classification trainer with metadata and diagnostics."""
 
+import contextlib
 import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from tensorsuggestlite import __version__
 from tensorsuggestlite.core.entities import (
     ArtifactBundle,
     TrainingConfig,
     TrainingDataset,
     TrainingResult,
 )
-from tensorsuggestlite.core.exceptions import EmptyDatasetError, ModelTrainingError
+from tensorsuggestlite.core.exceptions import (
+    EmptyDatasetError,
+    InvalidDatasetError,
+    ModelTrainingError,
+)
 from tensorsuggestlite.core.interfaces import LogCallback, ModelTrainerProtocol, ProgressCallback
 from tensorsuggestlite.core.profiler import DatasetProfiler
 from tensorsuggestlite.ml.callbacks import create_keras_epoch_callback
@@ -28,8 +34,30 @@ class KerasTextTrainer(ModelTrainerProtocol):
         progress_cb: ProgressCallback | None = None,
         log_cb: LogCallback | None = None,
     ) -> TrainingResult:
+        """Train a Keras text classifier, evaluate metrics, and save serialized artifacts.
+
+        Args:
+            dataset: Training dataset containing text samples and category labels.
+            output_dir: Destination directory where model, tokenizer, and metadata are saved.
+            config: Hyperparameters governing training epochs, learning rate, and batch size.
+            progress_cb: Optional callback receiving completion percentage (0-100).
+            log_cb: Optional callback receiving real-time log messages.
+
+        Returns:
+            TrainingResult containing artifact paths, metrics, and dataset summaries.
+
+        Raises:
+            EmptyDatasetError: If the provided dataset contains zero samples.
+            ModelTrainingError: If underlying ML dependencies cannot be loaded.
+        """
         if len(dataset) == 0:
             raise EmptyDatasetError("Dataset contains no samples to train.")
+
+        unique_labels = dataset.unique_categories
+        if len(unique_labels) < 2:
+            raise InvalidDatasetError(
+                f"A text classification model requires at least 2 distinct categories, found {len(unique_labels)}: {unique_labels}"
+            )
 
         cfg = config or TrainingConfig()
         out_dir = Path(output_dir).resolve()
@@ -37,20 +65,19 @@ class KerasTextTrainer(ModelTrainerProtocol):
 
         def report_log(msg: str) -> None:
             if log_cb:
-                try:
+                with contextlib.suppress(Exception):
                     log_cb(msg)
-                except Exception:
-                    pass
 
         def report_prog(val: int) -> None:
             if progress_cb:
-                try:
+                with contextlib.suppress(Exception):
                     progress_cb(max(0, min(100, val)))
-                except Exception:
-                    pass
 
         report_prog(0)
         report_log("Initializing TensorFlow training engine...")
+        import time
+
+        train_start_time = time.perf_counter()
 
         try:
             import numpy as np
@@ -100,9 +127,6 @@ class KerasTextTrainer(ModelTrainerProtocol):
             sequences, maxlen=cfg.max_sequence_length, padding="post"
         )
 
-        if len(tokenizer.word_index) > 0:
-            padded = padded / float(len(tokenizer.word_index))
-
         # 2. Encode Labels
         label_encoder = {label: idx for idx, label in enumerate(unique_labels)}
         encoded = np.array([label_encoder[c] for c in categories], dtype=np.int32)
@@ -110,8 +134,11 @@ class KerasTextTrainer(ModelTrainerProtocol):
         # 3. Train/Test Split
         test_size = cfg.test_size if len(texts) >= 10 else 0.0
         if test_size > 0:
+            counts_per_class = np.bincount(encoded)
+            can_stratify = bool(len(counts_per_class) >= 2 and np.min(counts_per_class) >= 2)
+            strat = encoded if can_stratify else None
             X_train, X_test, y_train, y_test = train_test_split(
-                padded, encoded, test_size=test_size, random_state=cfg.random_state
+                padded, encoded, test_size=test_size, random_state=cfg.random_state, stratify=strat
             )
         else:
             X_train, y_train = padded, encoded
@@ -188,7 +215,7 @@ class KerasTextTrainer(ModelTrainerProtocol):
         y_pred_probs = model.predict(X_test, verbose=0)
         y_pred_classes = np.argmax(y_pred_probs, axis=1)
 
-        eval_target_indices = sorted(list(set(y_test) | set(y_pred_classes)))
+        eval_target_indices = sorted(set(y_test) | set(y_pred_classes))
         cls_report = classification_report(
             y_test,
             y_pred_classes,
@@ -197,8 +224,34 @@ class KerasTextTrainer(ModelTrainerProtocol):
             zero_division=0,
         )
 
+        acc_metric_name = "eval_accuracy" if test_size > 0 else "train_accuracy"
         if "accuracy" in cls_report:
-            eval_metrics["eval_accuracy"] = float(cls_report["accuracy"])
+            eval_metrics[acc_metric_name] = float(cls_report["accuracy"])
+
+        # Extended metrics (Bloque 2.6)
+        train_duration = time.perf_counter() - train_start_time
+        eval_metrics["training_duration_seconds"] = round(train_duration, 2)
+        eval_metrics["total_parameters"] = float(model.count_params())
+
+        macro_avg = cls_report.get("macro avg", {})
+        weighted_avg = cls_report.get("weighted avg", {})
+        eval_metrics["macro_avg_f1"] = round(float(macro_avg.get("f1-score", 0.0)), 4)
+        eval_metrics["macro_avg_precision"] = round(float(macro_avg.get("precision", 0.0)), 4)
+        eval_metrics["macro_avg_recall"] = round(float(macro_avg.get("recall", 0.0)), 4)
+        eval_metrics["weighted_avg_f1"] = round(float(weighted_avg.get("f1-score", 0.0)), 4)
+        eval_metrics["weighted_avg_precision"] = round(float(weighted_avg.get("precision", 0.0)), 4)
+        eval_metrics["weighted_avg_recall"] = round(float(weighted_avg.get("recall", 0.0)), 4)
+
+        # Per-class metrics summary
+        per_class_metrics: dict[str, dict[str, float]] = {}
+        for cat in unique_labels:
+            if cat in cls_report and isinstance(cls_report[cat], dict):
+                per_class_metrics[cat] = {
+                    "precision": round(float(cls_report[cat].get("precision", 0.0)), 4),
+                    "recall": round(float(cls_report[cat].get("recall", 0.0)), 4),
+                    "f1_score": round(float(cls_report[cat].get("f1-score", 0.0)), 4),
+                    "support": float(cls_report[cat].get("support", 0)),
+                }
 
         # Confusion Matrix
         cm = confusion_matrix(
@@ -225,10 +278,16 @@ class KerasTextTrainer(ModelTrainerProtocol):
         label_encoder_path = out_dir / "label_encoder.json"
         metadata_path = out_dir / "model_metadata.json"
 
+        model.save(keras_model_path)
+
         with open(tokenizer_path, "w", encoding="utf-8") as f:
             f.write(tokenizer.to_json())
 
-        model.save(keras_model_path)
+        # Invalidate any stale TFLite binary from previous training run
+        stale_tflite = out_dir / "text_classifier.tflite"
+        if stale_tflite.is_file():
+            with contextlib.suppress(OSError):
+                stale_tflite.unlink()
 
         with open(label_encoder_path, "w", encoding="utf-8") as f:
             json.dump(label_encoder, f, indent=2)
@@ -251,7 +310,7 @@ class KerasTextTrainer(ModelTrainerProtocol):
 
         metadata_dict = {
             "created_at": datetime.now(UTC).isoformat(),
-            "version": "2.0.0",
+            "version": __version__,
             "dataset": {
                 "sha256": dataset_sha256,
                 "total_samples": len(texts),
@@ -274,6 +333,7 @@ class KerasTextTrainer(ModelTrainerProtocol):
             },
             "tensors": tensor_telemetry,
             "metrics": eval_metrics,
+            "per_class_metrics": per_class_metrics,
             "classification_report": cls_report,
             "confusion_matrix": cm_dict,
         }

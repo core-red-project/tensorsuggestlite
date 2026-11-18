@@ -3,29 +3,55 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "v[0-9]+.[0-9]+.[0-9]+*"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-packages:
-    name: Build Wheel & Source Distribution
-    runs-on: ubuntu-latest
+  verify-version:
+    name: Verify Tag Matches pyproject.toml
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
+
+      - name: Verify Version Tag
+        shell: bash
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "Triggered via workflow_dispatch; skipping strict tag equality check."
+            exit 0
+          fi
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          MANIFEST_VERSION=$(sed -nE 's/^version *= *"([^"]+)".*/\1/p' pyproject.toml | head -1)
+          echo "Release tag version: $TAG_VERSION"
+          echo "Manifest version:    $MANIFEST_VERSION"
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "ERROR: Git tag ($TAG_VERSION) does not match pyproject.toml version ($MANIFEST_VERSION)" >&2
+            exit 1
+          fi
+
+  build-packages:
+    name: Build Wheel & Source Distribution
+    needs: [verify-version]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
         with:
           fetch-depth: 0
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@168843c089c1f6d3575971488c5ef93cb1fa940e # v5.1.0
         with:
           enable-cache: true
 
       - name: Setup just
-        uses: taiki-e/install-action@just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: "1.40.0"
 
       - name: Pin Python
         run: uv python install 3.11
@@ -33,39 +59,53 @@ jobs:
       - name: Install dependencies
         run: just install
 
-      - name: Run Quality Verification
+      - name: Run Quality Verification (Gate)
         run: just check
 
       - name: Build Python packages
         run: just build
 
       - name: Upload python distribution packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: python-dist
           path: dist/*
+          retention-days: 1
 
   build-bundles:
-    name: Build Native Bundles (${{ matrix.os }})
+    name: Build Standalone Bundles (${{ matrix.target }})
+    needs: [verify-version]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
-          - os: windows-latest
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            build_gui: true
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            build_gui: false
+          - os: macos-15
+            target: aarch64-apple-darwin
+            build_gui: true
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+            build_gui: true
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@168843c089c1f6d3575971488c5ef93cb1fa940e # v5.1.0
         with:
           enable-cache: true
 
       - name: Setup just
-        uses: taiki-e/install-action@just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: "1.40.0"
 
       - name: Pin Python
         run: uv python install 3.11
@@ -73,55 +113,135 @@ jobs:
       - name: Install dependencies
         run: just install
 
-      - name: Build standalone bundles (Desktop & CLI)
-        run: just bundle
+      - name: Build Standalone CLI Binary
+        run: just bundle-cli
 
-      - name: Package macOS Assets
-        if: matrix.os == 'macos-14'
-        run: |
-          just dmg
-          cp dist/TensorSuggestLite.dmg dist/TensorSuggestLite-macOS.dmg
-          cp dist/tensorsuggestlite-cli/tensorsuggestlite-cli dist/tensorsuggestlite-cli-macOS
+      - name: Build Desktop GUI Bundle
+        if: matrix.build_gui
+        run: just bundle-desktop
 
-      - name: Package Windows Assets
-        if: matrix.os == 'windows-latest'
+      - name: Package Release Assets (Linux & macOS)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          cp dist/TensorSuggestLite/TensorSuggestLite.exe dist/TensorSuggestLite-Desktop-Windows.exe
-          cp dist/tensorsuggestlite-cli/tensorsuggestlite-cli.exe dist/tensorsuggestlite-cli-Windows.exe
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "$GITHUB_REF" ]; then
+            VERSION=$(sed -nE 's/^version *= *"([^"]+)".*/\1/p' pyproject.toml | head -1)
+          fi
+          TARGET="${{ matrix.target }}"
+          mkdir -p release-dist
 
-      - name: Package Linux Assets
-        if: matrix.os == 'ubuntu-latest'
+          # Package Standalone CLI
+          mkdir -p staging-cli
+          cp dist/tensorsuggestlite-cli staging-cli/
+          cp README.md LICENSE* staging-cli/
+          tar -czf "release-dist/tensorsuggestlite-cli-${VERSION}-${TARGET}.tar.gz" -C staging-cli tensorsuggestlite-cli README.md LICENSE*
+          rm -rf staging-cli
+
+          # Package Desktop GUI (if enabled)
+          if [ "${{ matrix.build_gui }}" = "true" ]; then
+            if [ "${{ matrix.os }}" = "macos-15" ]; then
+              just dmg
+              cp dist/TensorSuggestLite.dmg "release-dist/tensorsuggestlite-gui-${VERSION}-${TARGET}.dmg"
+            else
+              mkdir -p staging-gui
+              cp -r dist/TensorSuggestLite staging-gui/
+              cp README.md LICENSE* staging-gui/
+              tar -czf "release-dist/tensorsuggestlite-gui-${VERSION}-${TARGET}.tar.gz" -C staging-gui TensorSuggestLite README.md LICENSE*
+              rm -rf staging-gui
+            fi
+          fi
+
+      - name: Package Release Assets (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
         run: |
-          cp dist/TensorSuggestLite/TensorSuggestLite dist/TensorSuggestLite-Desktop-Linux
-          cp dist/tensorsuggestlite-cli/tensorsuggestlite-cli dist/tensorsuggestlite-cli-Linux
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "$GITHUB_REF" ]; then
+            VERSION=$(sed -nE 's/^version *= *"([^"]+)".*/\1/p' pyproject.toml | head -1)
+          fi
+          TARGET="${{ matrix.target }}"
+          mkdir -p release-dist
+
+          # Package Standalone CLI (Windows .zip)
+          mkdir -p staging-cli
+          cp dist/tensorsuggestlite-cli.exe staging-cli/
+          cp README.md LICENSE* staging-cli/
+          (cd staging-cli && python -m zipfile -c "../release-dist/tensorsuggestlite-cli-${VERSION}-${TARGET}.zip" *)
+          rm -rf staging-cli
+
+          # Package Desktop GUI (Windows .zip)
+          if [ "${{ matrix.build_gui }}" = "true" ]; then
+            mkdir -p staging-gui
+            cp -r dist/TensorSuggestLite staging-gui/
+            cp README.md LICENSE* staging-gui/
+            (cd staging-gui && python -m zipfile -c "../release-dist/tensorsuggestlite-gui-${VERSION}-${TARGET}.zip" *)
+            rm -rf staging-gui
+          fi
 
       - name: Upload bundle assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
-          name: bundles-${{ matrix.os }}
-          path: |
-            dist/TensorSuggestLite-*
-            dist/tensorsuggestlite-cli-*
+          name: bundles-${{ matrix.target }}
+          path: release-dist/*
+          retention-days: 1
 
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build-packages, build-bundles]
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tensorsuggestlite
+    permissions:
+      id-token: write
+    steps:
+      - name: Download python distribution packages
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        with:
+          name: python-dist
+          path: dist
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@168843c089c1f6d3575971488c5ef93cb1fa940e # v5.1.0
+
+      - name: Publish to PyPI via OIDC / Trusted Publishing
+        run: uv publish dist/*
 
   publish-release:
     name: Publish GitHub Release
     needs: [build-packages, build-bundles]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
 
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+      - name: Download all release bundles
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
           path: release-assets
+          pattern: bundles-*
           merge-multiple: true
 
-      - name: Create GitHub Release with Bundles
-        uses: softprops/action-gh-release@v2
+      - name: Download python distribution packages
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
-          files: release-assets/*
+          name: python-dist
+          path: release-assets
+
+      - name: Generate Checksums (SHA256SUMS)
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release with Bundles and Checksums
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+        with:
+          files: |
+            release-assets/*
           generate_release_notes: true
