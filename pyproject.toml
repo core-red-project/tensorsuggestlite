@@ -118,7 +118,6 @@ module = [
     "tensorflow.*",
     "sklearn.*",
     "yaml.*",
-    "toml.*",
     "ai_edge_litert.*",
     "tflite_runtime.*",
 ]

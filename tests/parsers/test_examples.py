@@ -1,9 +1,9 @@
 """Tests verifying configuration file parsing and interpreters structure."""
 
 import json
+import tomllib
 from pathlib import Path
 
-import toml
 import yaml
 
 EXAMPLES_DIR = Path(__file__).resolve().parent.parent.parent / "examples"
@@ -39,8 +39,8 @@ def test_example_toml_syntax():
     """Verify example.toml is valid and contains standard structure."""
     toml_path = EXAMPLES_DIR / "example.toml"
     assert toml_path.exists(), f"Missing {toml_path}"
-    with open(toml_path, encoding="utf-8") as f:
-        data = toml.load(f)
+    with open(toml_path, "rb") as f:
+        data = tomllib.load(f)
     assert isinstance(data, dict)
     assert len(data) > 0
     for category, content in data.items():
