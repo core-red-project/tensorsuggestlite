@@ -200,9 +200,10 @@ def enable_os_drag_and_drop(on_drop_callback: Callable[[list[str]], None]) -> bo
     Returns:
         bool: True if drop handler was successfully bound, False otherwise.
     """
-    if sys.platform != "darwin":
+    if sys.platform == "darwin":
+        return _hook_macos_cocoa_dnd(on_drop_callback) or _hook_glfw_dnd(on_drop_callback)
+    else:
         return _hook_glfw_dnd(on_drop_callback)
-    return _hook_macos_cocoa_dnd(on_drop_callback) or _hook_glfw_dnd(on_drop_callback)
 
 
 __all__ = ["enable_os_drag_and_drop"]

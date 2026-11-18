@@ -1,5 +1,6 @@
 # Task Runner for TensorSuggestLite
 set shell := ["bash", "-uc"]
+set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 default:
     @just --list
@@ -71,8 +72,4 @@ bench:
 
 # Remove build artifacts and temporary caches
 clean:
-    rm -rf dist/ build/ *.egg-info
-    rm -rf generated/
-    rm -rf __pycache__ */__pycache__ */*/__pycache__
-    rm -rf .pytest_cache .mypy_cache .ruff_cache
-    rm -f *.pyc */*.pyc */*/*.pyc
+    uv run python -c "import shutil; [shutil.rmtree(p, ignore_errors=True) for p in ['dist', 'build', 'generated', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.tensorsuggestlite']]"

@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 from tensorsuggestlite.core.entities import TrainingResult
 from tensorsuggestlite.ui.app import is_gui_available
 from tensorsuggestlite.ui.native_dialogs import NativeDialogBridge
@@ -21,11 +23,9 @@ def test_native_dialog_bridge_file_types():
     assert NativeDialogBridge.save_file_dialog is not None
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS osascript test")
 def test_native_dialog_bridge_macos_script_generation(monkeypatch):
     """Verify macOS osascript command structure."""
-    if sys.platform != "darwin":
-        return
-
     calls = []
 
     def fake_run(cmd, *args, **kwargs):
